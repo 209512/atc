@@ -57,6 +57,14 @@ app.post('/api/release', (req, res) => {
   res.json({ message: 'Released' });
 });
 
+// Simulate Lock Request Endpoint
+app.post('/api/lock', (req, res) => {
+  // Spawn a temporary agent to try and grab the lock
+  const requester = req.body.requester || `Ext-${Date.now()}`;
+  atcService.spawnAgent(requester);
+  res.json({ message: `Agent ${requester} spawned` });
+});
+
 app.get('/', (req, res) => {
   res.send('ATC Backend is Running. Connect to /api/stream for SSE.');
 });
