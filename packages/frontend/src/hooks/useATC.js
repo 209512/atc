@@ -14,9 +14,11 @@ export const useATC = () => {
 
   const eventSourceRef = useRef(null);
 
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
   useEffect(() => {
     // SSE Connection
-    const eventSource = new EventSource('/api/stream');
+    const eventSource = new EventSource(`${API_URL}/api/stream`);
     eventSourceRef.current = eventSource;
 
     eventSource.onopen = () => {
@@ -51,7 +53,7 @@ export const useATC = () => {
 
   const triggerOverride = async () => {
     try {
-      const res = await fetch('/api/override', { method: 'POST' });
+      const res = await fetch(`${API_URL}/api/override`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         toast.success(`⚠️ AI OVERRIDE: Human Priority Executed. ${data.message}`);
@@ -65,7 +67,7 @@ export const useATC = () => {
   
   const releaseLock = async () => {
       try {
-          await fetch('/api/release', { method: 'POST' });
+          await fetch(`${API_URL}/api/release`, { method: 'POST' });
           toast.info('Lock Released');
       } catch (e) {
           toast.error('Failed to release');
@@ -113,7 +115,7 @@ export const useATC = () => {
     // For now, in this file, I'll just write the function to hit `/api/lock`.
     
     const requests = Array(5).fill(0).map((_, i) => 
-        fetch('/api/lock', { 
+        fetch(`${API_URL}/api/lock`, { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ requester: `Client-Sim-${i}` })

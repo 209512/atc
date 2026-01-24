@@ -6,9 +6,10 @@ const atcService = require('./src/services/atc.service');
 dotenv.config({ path: '../../.env' });
 
 const app = express();
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 3000;
 
-app.use(cors());
+// Enable CORS for all routes
+app.use(cors({ origin: '*' }));
 app.use(express.json());
 
 // Initialize Hazelcast & Simulation
@@ -43,26 +44,40 @@ app.get('/api/stream', (req, res) => {
 
 // Human Override Endpoint
 app.post('/api/override', async (req, res) => {
+  console.log('POST /api/override called');
   try {
     const result = await atcService.humanOverride();
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Override Error:', error);
+    res.status(500).json({ error: error.message || 'Unknown error during override' });
   }
 });
 
 // Release Human Lock Endpoint
 app.post('/api/release', (req, res) => {
-  atcService.releaseHumanLock();
-  res.json({ message: 'Released' });
+  console.log('POST /api/release called');
+  try {
+    atcService.releaseHumanLock();
+    res.json({ message: 'Released' });
+  } catch (error) {
+    console.error('Release Error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Simulate Lock Request Endpoint
 app.post('/api/lock', (req, res) => {
-  // Spawn a temporary agent to try and grab the lock
-  const requester = req.body.requester || `Ext-${Date.now()}`;
-  atcService.spawnAgent(requester);
-  res.json({ message: `Agent ${requester} spawned` });
+  console.log('POST /api/lock called');
+  try {
+    // Spawn a temporary agent to try and grab the lock
+    const requester = req.body.requester || `Ext-${Date.now()}`;
+    atcService.spawnAgent(requester);
+    res.json({ message: `Agent ${requester} spawned` });
+  } catch (error) {
+    console.error('Simulation Error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get('/', (req, res) => {
