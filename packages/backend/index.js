@@ -86,20 +86,6 @@ app.post('/api/agents/scale', async (req, res) => {
   res.json({ success: true, message: `Scaled Agent Pool to ${count}` });
 });
 
-// Endpoint for "Simulate AI Conflict" button (Legacy, can be mapped to scale)
-app.post('/api/lock', async (req, res) => {
-  // Use the new Pool Scaling logic instead of spawning temp agents
-  // Temporarily scale up to 5 agents, then scale back down
-  await atcService.updateAgentPool(5);
-  
-  // Revert after 10 seconds
-  setTimeout(() => {
-     atcService.updateAgentPool(2);
-  }, 10000);
-
-  res.json({ success: true, message: `Scaled Agent Pool to 5 for conflict simulation` });
-});
-
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

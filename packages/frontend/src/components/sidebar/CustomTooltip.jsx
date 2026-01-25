@@ -1,5 +1,6 @@
 import React from 'react';
 import clsx from 'clsx';
+import PropTypes from 'prop-types';
 
 export const CustomTooltip = ({ children, text, fullWidth = false, position = "top", align = "center", shiftLeft = false }) => {
     const posClasses = {
@@ -33,4 +34,13 @@ export const CustomTooltip = ({ children, text, fullWidth = false, position = "t
             </div>
         </div>
     );
+};
+
+CustomTooltip.propTypes = {
+    children: PropTypes.node.isRequired,
+    text: PropTypes.string.isRequired,
+    fullWidth: PropTypes.bool,
+    position: PropTypes.oneOf(['top', 'bottom', 'left', 'right']),
+    align: PropTypes.oneOf(['center', 'left', 'right']),
+    shiftLeft: PropTypes.bool
 };

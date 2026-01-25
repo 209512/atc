@@ -1,5 +1,6 @@
 import React from 'react';
 import clsx from 'clsx';
+import PropTypes from 'prop-types';
 
 export const MetricBox = ({ label, value, isDark, color }) => (
     <div className={clsx("p-1.5 rounded border text-center flex flex-col items-center justify-center h-full w-full min-w-0 box-border", isDark ? "bg-gray-800/50 border-gray-700" : "bg-gray-100 border-gray-200")}>
@@ -7,3 +8,10 @@ export const MetricBox = ({ label, value, isDark, color }) => (
         <div className={clsx("font-mono font-bold text-[11px] truncate w-full px-1", color || (isDark ? "text-white" : "text-gray-900"))}>{value}</div>
     </div>
 );
+
+MetricBox.propTypes = {
+    label: PropTypes.string.isRequired,
+    value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    isDark: PropTypes.bool.isRequired,
+    color: PropTypes.string
+};

@@ -1,5 +1,6 @@
 import React from 'react';
 import clsx from 'clsx';
+import PropTypes from 'prop-types';
 
 export const StatusBadge = ({ status }) => {
     const styles = { 
@@ -9,4 +10,8 @@ export const StatusBadge = ({ status }) => {
         "GLOBAL STOP": "bg-red-500/20 text-red-500" 
     };
     return <span className={clsx("text-[9px] font-bold px-1.5 py-0.5 rounded", styles[status] || styles.WAITING)}>{status}</span>;
+};
+
+StatusBadge.propTypes = {
+    status: PropTypes.string.isRequired
 };

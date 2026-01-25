@@ -1,6 +1,7 @@
 import React from 'react';
 import clsx from 'clsx';
 import { Pause, Play } from 'lucide-react';
+import PropTypes from 'prop-types';
 import { CustomTooltip } from './CustomTooltip';
 import { StatusBadge } from './StatusBadge';
 
@@ -23,3 +24,14 @@ export const AgentRow = ({ agent, isDark, onTogglePause }) => (
         </CustomTooltip>
     </div>
 );
+
+AgentRow.propTypes = {
+    agent: PropTypes.shape({
+        id: PropTypes.string.isRequired,
+        status: PropTypes.string.isRequired,
+        resource: PropTypes.string,
+        activity: PropTypes.string
+    }).isRequired,
+    isDark: PropTypes.bool.isRequired,
+    onTogglePause: PropTypes.func.isRequired
+};
