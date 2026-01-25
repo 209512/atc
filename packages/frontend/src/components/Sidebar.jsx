@@ -9,7 +9,6 @@ const CustomTooltip = ({ children, text, fullWidth = false, position = "top", al
     const posClasses = {
         top: "bottom-full mb-2",
         bottom: "top-full mt-2",
-        // shiftLeft일 때 mr-[150px] 정도로 설정하면 레이더 중앙 부근에 옵니다.
         left: clsx(
             "right-full top-1/2 -translate-y-1/2",
             shiftLeft ? "translate-x-[230px] -translate-x-1/2" : "mr-2" 
@@ -28,7 +27,6 @@ const CustomTooltip = ({ children, text, fullWidth = false, position = "top", al
             {children}
             <div className={clsx(
                 "absolute opacity-0 group-hover:opacity-100 hidden group-hover:block px-2 py-1 bg-black text-white text-[10px] rounded whitespace-nowrap shadow-xl border border-gray-800 pointer-events-none",
-                // z-index를 최상단으로 올림
                 "z-[10000]",
                 posClasses[position],
                 (position === 'top' || position === 'bottom') && alignClasses[align]
@@ -168,7 +166,7 @@ export const Sidebar = ({ state, triggerOverride, releaseLock, setTrafficIntensi
 
         <div className="flex-1 overflow-y-auto overflow-x-hidden w-full custom-scrollbar p-6 space-y-4">
             
-            {/* 1. Radar - shiftLeft 프롭을 사용하여 툴팁 위치를 레이더 중앙 근처로 조정 */}
+            {/* 1. Radar Section */}
             <div className="flex flex-col items-center group relative -my-6">
                 <CustomTooltip text="Real-time Traffic Radar" position="left" shiftLeft={true}>
                     <div className="scale-75 origin-top cursor-crosshair">
@@ -193,7 +191,7 @@ export const Sidebar = ({ state, triggerOverride, releaseLock, setTrafficIntensi
                 </CustomTooltip>
             </div>
 
-            {/* Controller 섹션 - Traffic Load와 가로 시작 위치 동기화(align="left") */}
+            {/* Controller Section */}
             <div className={clsx("w-full p-2 rounded-lg border flex justify-between items-center mt-2", isDark ? "bg-gray-800/50 border-gray-700" : "bg-gray-100 border-gray-200")}>
                 <CustomTooltip text="Current access authority status" align="left">
                     <span className="text-[10px] uppercase font-bold opacity-60 cursor-help">CONTROLLER</span>

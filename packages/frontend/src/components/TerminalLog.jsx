@@ -16,7 +16,7 @@ export const TerminalLog = ({ state }) => {
 
   const playSound = (type) => {
       if (isMuted) return;
-      // Audio logic placeholder
+      // Audio logic can be added here
   };
 
   useEffect(() => {
@@ -81,7 +81,6 @@ export const TerminalLog = ({ state }) => {
       return true;
   });
 
-  // Manual Resize Logic
   const startResizing = (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -91,9 +90,7 @@ export const TerminalLog = ({ state }) => {
       const startWidth = width;
 
       const onMouseMove = (moveEvent) => {
-          // Pulling UP (smaller Y) should INCREASE height
           const newHeight = startHeight + (startY - moveEvent.clientY);
-          // Pulling RIGHT (larger X) should INCREASE width
           const newWidth = startWidth + (moveEvent.clientX - startX);
           
           if (newHeight > 150 && newHeight < 800) {
