@@ -1,5 +1,6 @@
 const { Client } = require('hazelcast-client');
 const getHazelcastConfig = require('../config/hazelcast.config');
+const CONSTANTS = require('../config/constants');
 
 class HazelcastManager {
   constructor() {
@@ -28,7 +29,7 @@ class HazelcastManager {
         this.sessionService = this.cpSubsystem.sessionManagementService || this.cpSubsystem.getCPSessionManager();
       }
 
-      this.map = await this.client.getMap('atc-metadata');
+      this.map = await this.client.getMap(CONSTANTS.MAP_ATC_METADATA);
       
       this.isInitialized = true;
       console.log('✅ Hazelcast Admin Connected & CP Subsystem Ready.');

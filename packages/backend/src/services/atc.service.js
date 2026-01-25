@@ -1,13 +1,7 @@
 const { EventEmitter } = require('events');  
 const hazelcastManager = require('../core/HazelcastManager');  
 const Agent = require('../core/Agent');  
-
-const CONSTANTS = {
-    UPDATE_POOL_DELAY: 300,
-    HUMAN_OVERRIDE_DELAY: 1000,
-    LOCK_TIMEOUT: 5000,
-    ADMIN_FENCE: "ADMIN-SESSION",
-};
+const CONSTANTS = require('../config/constants');
 
 class ATCService extends EventEmitter {  
   constructor() {  
@@ -174,9 +168,9 @@ class ATCService extends EventEmitter {
   async pauseAgent(agentId, pause) {
       const client = hazelcastManager.getClient();
       if (client) {
-          const map = await client.getMap('agent_commands');
+          const map = await client.getMap(CONSTANTS.MAP_AGENT_COMMANDS);
           if (pause) {
-              await map.put(agentId, { cmd: "PAUSE" });
+              await map.put(agentId, { cmd: CONSTANTS.CMD_PAUSE });
           } else {
               await map.remove(agentId);
           }
@@ -186,7 +180,7 @@ class ATCService extends EventEmitter {
   async getAgentStatus() {
       const client = hazelcastManager.getClient();
       if (client) {
-          const map = await client.getMap('agent_status_map');
+          const map = await client.getMap(CONSTANTS.MAP_AGENT_STATUS);
           const entrySet = await map.entrySet();
           // Convert to array
           const statusList = [];

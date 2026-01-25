@@ -1,6 +1,7 @@
 const { Client } = require('hazelcast-client');  
 const getHazelcastConfig = require('../config/hazelcast.config');  
-  
+const CONSTANTS = require('../config/constants');
+
 class Agent {  
   constructor(id, eventBus) {  
     this.id = id;  
@@ -17,9 +18,9 @@ class Agent {
       console.log(`🤖 Spawning Agent: ${this.id}`);  
       const config = getHazelcastConfig(this.id);  
       this.client = await Client.newHazelcastClient(config);  
-      this.stateMap = await this.client.getMap('agent_states'); // Initialize state map
-      this.statusMap = await this.client.getMap('agent_status_map');
-      this.commandsMap = await this.client.getMap('agent_commands');
+      this.stateMap = await this.client.getMap(CONSTANTS.MAP_AGENT_STATES); // Initialize state map
+      this.statusMap = await this.client.getMap(CONSTANTS.MAP_AGENT_STATUS);
+      this.commandsMap = await this.client.getMap(CONSTANTS.MAP_AGENT_COMMANDS);
       this.loop();  
     } catch (err) {  
       console.error(`❌ Agent ${this.id} failed to start:`, err);  
@@ -30,7 +31,7 @@ class Agent {
   async loop() {   
     console.log(`▶️ Agent ${this.id} entering traffic control loop.`);
     const cpSubsystem = this.client.getCPSubsystem();
-    const lock = await cpSubsystem.getLock('traffic-control-lock');   
+    const lock = await cpSubsystem.getLock(CONSTANTS.LOCK_NAME);   
   
     while (this.isRunning) {   
       try {   
@@ -38,30 +39,30 @@ class Agent {
 
         // 1. Check Global Stop
         if (this.eventBus.state.globalStop) {
-             await this.updateStatus("GLOBAL STOP", "None", "System Halted");
-             await new Promise(r => setTimeout(r, 1000));
+             await this.updateStatus(CONSTANTS.STATUS_GLOBAL_STOP, CONSTANTS.RESOURCE_NONE, "System Halted");
+             await new Promise(r => setTimeout(r, CONSTANTS.AGENT_LOOP_DELAY));
              continue;
         }
 
         // 2. Check Targeted Pause
         if (this.commandsMap) {
             const cmd = await this.commandsMap.get(this.id);
-            if (cmd && cmd.cmd === "PAUSE") {
-                await this.updateStatus("PAUSED", "None", "Admin Paused");
-                await new Promise(r => setTimeout(r, 1000));
+            if (cmd && cmd.cmd === CONSTANTS.CMD_PAUSE) {
+                await this.updateStatus(CONSTANTS.STATUS_PAUSED, CONSTANTS.RESOURCE_NONE, "Admin Paused");
+                await new Promise(r => setTimeout(r, CONSTANTS.AGENT_LOOP_DELAY));
                 continue;
             }
         }
 
         // 3. Check Override Signal (Yield)
         if (this.eventBus.state.overrideSignal) {
-          await this.updateStatus("WAITING", "None", "Yielding to Human");
+          await this.updateStatus(CONSTANTS.STATUS_WAITING, CONSTANTS.RESOURCE_NONE, "Yielding to Human");
           await this.performBackgroundTasks("Yielding to Human");
-          await new Promise(r => setTimeout(r, 7000)); // Deep yield
+          await new Promise(r => setTimeout(r, CONSTANTS.AGENT_YIELD_DELAY)); // Deep yield
           continue;
         }
 
-        await this.updateStatus("WAITING", "traffic-control-lock", "Queued for Lock");
+        await this.updateStatus(CONSTANTS.STATUS_WAITING, CONSTANTS.LOCK_NAME, "Queued for Lock");
         this.emitWaiting(this.id);   
         
         // [Refactor] Use lease time: tryLock(wait=5000, lease=10000)
@@ -79,14 +80,14 @@ class Agent {
 
           console.log(`🔒 [${this.id}] Access Granted`);   
           // [수정] UI에 토큰 대신 ACTIVE 상태 전달
-          this.emitAcquired(this.id, "ACTIVE", 0);   
-          await this.updateStatus("ACTIVE", "traffic-control-lock", "Optimizing signal timing...");
+          this.emitAcquired(this.id, CONSTANTS.STATUS_ACTIVE, 0);   
+          await this.updateStatus(CONSTANTS.STATUS_ACTIVE, CONSTANTS.LOCK_NAME, "Optimizing signal timing...");
   
           // Simulate Work with Interrupt Check
           const yielded = await this.simulateWorkOrYield(lock);
           if (yielded) {
              await this.performBackgroundTasks("Handing over to Human");
-             await new Promise(r => setTimeout(r, 7000));
+             await new Promise(r => setTimeout(r, CONSTANTS.AGENT_YIELD_DELAY));
              continue;
           }
   
@@ -100,13 +101,13 @@ class Agent {
             console.warn(`⚠️ [${this.id}] Unlock notice: ${unlockErr.message}`);  
           } finally {
             this.emitReleased(this.id);
-            await this.updateStatus("IDLE", "None", "Monitoring");
+            await this.updateStatus(CONSTANTS.STATUS_IDLE, CONSTANTS.RESOURCE_NONE, "Monitoring");
           }
             
           await new Promise(r => setTimeout(r, 500));   
         } else {   
           // Productive Idle
-          await this.updateStatus("IDLE", "None", "Performing background analysis...");
+          await this.updateStatus(CONSTANTS.STATUS_IDLE, CONSTANTS.RESOURCE_NONE, "Performing background analysis...");
           await this.performBackgroundTasks("No lock acquired");
           this.emitCollision();   
           await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));   
@@ -150,7 +151,7 @@ class Agent {
   }
 
   async simulateWorkOrYield(lock) {
-     for (let i = 0; i < 4; i++) { // 4 * 500ms = 2s
+     for (let i = 0; i < CONSTANTS.AGENT_WORK_STEPS; i++) { // 4 * 500ms = 2s
         if (this.eventBus.state.overrideSignal) {
             console.log(`⚠️ [${this.id}] Override detected! Saving context and yielding...`);
             if (this.stateMap) {
@@ -164,7 +165,7 @@ class Agent {
             this.emitReleased(this.id);
             return true; // Yielded
         }
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, CONSTANTS.AGENT_WORK_STEP_DELAY));
      }
      return false; // Completed
   }
