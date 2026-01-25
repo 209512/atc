@@ -120,3 +120,9 @@ dist
 
 # OS X
 .DS_Store
+
+# Security
+packages/backend/certs/
+
+# Archives
+*.zip
