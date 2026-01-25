@@ -1,82 +1,94 @@
-# ATC (Agent Traffic Control) 🚦
+# 🚁 ATC Core - Distributed Air Traffic Control System
 
-> **Distributed System Governance Visualization Platform**  
-> *"Like a traffic control tower for AI Agents competing for resources."*
+A high-performance, real-time Air Traffic Control (ATC) simulation platform demonstrating distributed locking and state management using **Hazelcast Cloud**. This project visualizes complex concurrency patterns through a modern, interactive dashboard.
 
-![ATC Dashboard Preview](https://via.placeholder.com/1200x600.png?text=ATC+Dashboard+Preview)
-
-## 📖 Introduction
-
-In modern distributed systems, multiple services (Agents) often compete for a single shared resource. Without proper "traffic control," this leads to:
-- **Race Conditions**: Data corruption.
-- **Deadlocks**: System freeze.
-- **Starvation**: Some agents never get access.
-
-**ATC** is a visualization and governance tool that solves these problems using **Hazelcast CP Subsystem** (Raft Consensus). It visualizes the competition in real-time and provides a "Human Override" switch for emergency manual control.
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![React](https://img.shields.io/badge/frontend-React_19-61DAFB.svg)
+![Node](https://img.shields.io/badge/backend-Node.js-339933.svg)
+![Hazelcast](https://img.shields.io/badge/state-Hazelcast_Cloud-orange.svg)
 
 ## ✨ Key Features
 
-### 1. 🌐 Real-Time CP Governance Visualization
-- **Radar Chart**: Visualizes the latency and "distance" of each agent from the lock.
-- **Metrics**: Real-time tracking of Lock Hold Time, Collision Count, and Fencing Tokens.
-- **Status Indicators**: Instantly see who holds the lock (Agent-1, Agent-2, or Human).
+### 🖥️ Interactive Dashboard (Frontend)
+- **Real-time Radar**: Visualizes agent activity and traffic density with a dynamic scanning radar animation.
+- **Draggable Terminal Log**: A resizeable, draggable system log with advanced filtering (CRITICAL, WARN, INFO) and sticky headers.
+- **Control Sidebar**: 
+  - **Traffic Load Control**: Slider to adjust agent density in real-time.
+  - **Emergency Override**: Manual administrative takeover to forcefully acquire locks and yield all agents.
+  - **Global Stop/Resume**: Instantly pause or resume all autonomous agents.
+  - **Theme & Audio**: Toggle between Dark/Light modes and mute system sounds.
+- **Custom Tooltips**: High-performance, hook-free custom tooltips for all interactive elements.
 
-### 2. 🛡️ Strong Consistency (CP) with FencedLock
-- Implements **FencedLock** to guarantee linearizability.
-- Prevents "Zombie Lock" issues where a dead process keeps holding a resource.
-- Uses monotonic fencing tokens to reject stale requests.
+### ⚙️ Distributed Core (Backend)
+- **Hazelcast Integration**: Uses Hazelcast CP Subsystem for strong consistency and distributed locking (FencedLock).
+- **Autonomous Agents**: Simulates independent agents competing for shared resources (airspace/runways).
+- **Collision Detection**: Real-time tracking of lock acquisition failures and resource conflicts.
+- **REST API**: Express.js endpoints for frontend-backend communication.
 
-### 3. 🚨 Human Override (Panic Switch)
-- **Administrative Force Unlock**: Bypasses the standard queue.
-- **Session Termination**: Administratively kills the CP Session of a rogue agent to force-release the lock.
-- Ensures humans always have the final say in system emergencies.
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js (v18+)
+- Hazelcast Cloud Cluster (or local instance)
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd atc
+   ```
+
+2. **Install Dependencies**
+   ```bash
+   # Install root dependencies
+   npm install
+
+   # Install frontend dependencies
+   cd packages/frontend
+   npm install
+
+   # Install backend dependencies
+   cd ../backend
+   npm install
+   ```
+
+3. **Configuration**
+   - Configure your Hazelcast Cloud credentials in `packages/backend/src/config/hazelcast.config.js` or via environment variables.
+
+### Running the System
+
+1. **Start the Backend**
+   ```bash
+   cd packages/backend
+   node index.js
+   ```
+   *Server runs on port 3000*
+
+2. **Start the Frontend**
+   ```bash
+   cd packages/frontend
+   npm run dev
+   ```
+   *Client runs on http://localhost:5173*
+
+## 🏗️ Architecture
+
+- **Frontend**: Built with React 19, Vite, and Tailwind CSS. It uses polling to fetch state from the backend and provides an optimistic UI for control actions.
+- **Backend**: Node.js service that manages the lifecycle of autonomous agents. Each agent attempts to acquire a lock from Hazelcast, simulates work, and releases it.
+- **State Management**: The "Controller" state (who holds the lock) is managed by Hazelcast's distributed primitives, ensuring that only one agent (or the Human Admin) controls the critical section at any time.
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React 19, Vite, TailwindCSS, Framer Motion (Animations), Recharts (Visualization)
-- **Backend**: Node.js, Express, Server-Sent Events (SSE)
-- **Core Engine**: **Hazelcast Node.js Client v5.3** (CP Subsystem, FencedLock, Raft)
-- **Deployment**: Vercel (Frontend), Mock Mode Fallback (for serverless environments)
+- **Frontend**: React, Framer Motion, Lucide React, clsx, React Draggable.
+- **Backend**: Express, Hazelcast Client.
+- **Styling**: Tailwind CSS.
+- **Tooling**: Vite, ESLint.
 
-## 🚀 How It Works
+## 🤝 Contributing
 
-1. **Simulation**: The backend spawns multiple "Agents" that try to acquire a distributed lock.
-2. **Competition**: Agents race to call `lock.tryLock()`. Only one succeeds.
-3. **Visualization**: The state (Holder, Token, Latency) is streamed to the Frontend via SSE.
-4. **Governance**: If an agent holds the lock too long, the Admin can click **"Human Override"**.
-   - The backend sends a `forceCloseSession` command to the Raft group.
-   - The rogue agent is evicted.
-   - Control is handed to the Human user.
-
-## 📦 Installation & Local Run
-
-### Prerequisites
-- Node.js v18+
-- Docker (for local Hazelcast cluster)
-
-### 1. Start Hazelcast Cluster
-```bash
-docker run -p 5701:5701 hazelcast/hazelcast
-```
-
-### 2. Install Dependencies
-```bash
-npm install
-```
-
-### 3. Start Backend & Frontend
-```bash
-# Terminal 1 (Backend)
-cd packages/backend
-npm run dev
-
-# Terminal 2 (Frontend)
-cd packages/frontend
-npm run dev
-```
-
-## ☁️ Deployment Note (Vercel)
-This project is deployed on Vercel. Due to serverless network restrictions preventing direct access to the local Hazelcast container, the live demo runs in a **"High-Fidelity Mock Mode"**. This simulates the exact behavior of the CP Subsystem logic to demonstrate the architectural concepts.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📄 License
-MIT
+
+This project is open source and available under the [MIT License](LICENSE).
