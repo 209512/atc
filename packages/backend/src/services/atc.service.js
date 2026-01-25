@@ -1,7 +1,14 @@
 const { EventEmitter } = require('events');  
 const hazelcastManager = require('../core/HazelcastManager');  
 const Agent = require('../core/Agent');  
-  
+
+const CONSTANTS = {
+    UPDATE_POOL_DELAY: 300,
+    HUMAN_OVERRIDE_DELAY: 1000,
+    LOCK_TIMEOUT: 5000,
+    ADMIN_FENCE: "ADMIN-SESSION",
+};
+
 class ATCService extends EventEmitter {  
   constructor() {  
     super();  
@@ -97,13 +104,13 @@ class ATCService extends EventEmitter {
       const lock = await cp.getLock(this.state.resourceId);  
         
       // Wait briefly to let agents detect signal and yield
-      await new Promise(r => setTimeout(r, 1000)); // Increased to 1s for safety
+      await new Promise(r => setTimeout(r, CONSTANTS.HUMAN_OVERRIDE_DELAY));
 
       // Use longer timeout to guarantee acquisition
-      const acquired = await lock.tryLock(5000);  
+      const acquired = await lock.tryLock(CONSTANTS.LOCK_TIMEOUT);  
         
       if (acquired) {  
-        const fence = "ADMIN-SESSION";  
+        const fence = CONSTANTS.ADMIN_FENCE;  
         console.log(`🚨 [Admin] Override Successful`);  
           
         this.state.holder = 'Human (Admin)';  
