@@ -10,7 +10,7 @@ const getHazelcastConfig = (agentIdOrName = 'ATC-Client') => {
     instanceName: agentIdOrName,
     network: {
       hazelcastCloud: {
-        discoveryToken: process.env.HAZELCAST_DISCOVERY_TOKEN || 'TM8xTl9BXmJxk7ytHDpf8ONpqLNYBVteCEocBAuvNskVtv4MUx'
+        discoveryToken: process.env.HAZELCAST_DISCOVERY_TOKEN
       },
       ssl: {
         enabled: true,
@@ -19,7 +19,7 @@ const getHazelcastConfig = (agentIdOrName = 'ATC-Client') => {
           cert: fs.readFileSync(path.join(__dirname, '../../certs/client-cert.pem')),
           ca: fs.readFileSync(path.join(__dirname, '../../certs/ca-cert.pem')),
           rejectUnauthorized: false,
-          passphrase: process.env.HAZELCAST_PASSWORD || '7a0846ec34c'
+          passphrase: process.env.HAZELCAST_PASSWORD
         }
       }
     },
