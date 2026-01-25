@@ -1,89 +1,104 @@
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const atcService = require('./src/services/atc.service');
 
-dotenv.config({ path: '../../.env' });
-
 const app = express();
-const port = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
-// Enable CORS for all routes
-app.use(cors({ origin: '*' }));
+app.use(cors());
 app.use(express.json());
 
-// Initialize Hazelcast & Simulation
-atcService.init().then(() => {
-  console.log('ATC Service Initialized');
-  atcService.startSimulation();
-}).catch(err => {
-  console.error('Failed to init ATC:', err);
-});
+// 1. Initialize System (Non-blocking)
+atcService.init()
+  .then(() => {
+    // Start background agents only if init succeeded
+    atcService.startSimulation(2);
+  })
+  .catch(err => {
+    console.error('⚠️ ATC Service failed to initialize, but starting Web Server anyway.', err.message);
+  });
 
-// SSE Endpoint
+// 2. SSE Endpoint
 app.get('/api/stream', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
 
-  const sendState = (state) => {
-    res.write(`data: ${JSON.stringify(state)}\n\n`);
+  const sendState = (data) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
 
-  // Send current state immediately
+  // Send initial state
   sendState(atcService.state);
 
-  // Subscribe to updates
-  const handler = (state) => sendState(state);
-  atcService.on('state', handler);
+  // Subscribe
+  const listener = (data) => sendState(data);
+  atcService.on('state', listener);
 
+  // Cleanup
   req.on('close', () => {
-    atcService.off('state', handler);
+    atcService.removeListener('state', listener);
   });
 });
 
-// Human Override Endpoint
+// 3. API Endpoints
 app.post('/api/override', async (req, res) => {
-  console.log('POST /api/override called');
-  try {
-    const result = await atcService.humanOverride();
-    res.json(result);
-  } catch (error) {
-    console.error('Override Error:', error);
-    res.status(500).json({ error: error.message || 'Unknown error during override' });
+  const result = await atcService.humanOverride();
+  res.json(result);
+});
+
+app.post('/api/release', async (req, res) => {
+  await atcService.releaseHumanLock();
+  res.json({ success: true });
+});
+
+// Global Stop
+app.post('/api/stop', async (req, res) => {
+    const { enable } = req.body;
+    await atcService.toggleGlobalStop(enable);
+    res.json({ success: true, globalStop: enable });
+});
+
+// Targeted Pause
+app.post('/api/agents/:id/pause', async (req, res) => {
+    const { id } = req.params;
+    const { pause } = req.body;
+    await atcService.pauseAgent(id, pause);
+    res.json({ success: true });
+});
+
+// Agent Status
+app.get('/api/agents/status', async (req, res) => {
+    const status = await atcService.getAgentStatus();
+    res.json(status);
+});
+
+// Endpoint for "Traffic Intensity" Slider
+app.post('/api/agents/scale', async (req, res) => {
+  const { count } = req.body;
+  if (!count || count < 0 || count > 20) {
+    return res.status(400).json({ error: 'Invalid agent count (0-20)' });
   }
+
+  await atcService.updateAgentPool(count);
+  res.json({ success: true, message: `Scaled Agent Pool to ${count}` });
 });
 
-// Release Human Lock Endpoint
-app.post('/api/release', (req, res) => {
-  console.log('POST /api/release called');
-  try {
-    atcService.releaseHumanLock();
-    res.json({ message: 'Released' });
-  } catch (error) {
-    console.error('Release Error:', error);
-    res.status(500).json({ error: error.message });
-  }
+// Endpoint for "Simulate AI Conflict" button (Legacy, can be mapped to scale)
+app.post('/api/lock', async (req, res) => {
+  // Use the new Pool Scaling logic instead of spawning temp agents
+  // Temporarily scale up to 5 agents, then scale back down
+  await atcService.updateAgentPool(5);
+  
+  // Revert after 10 seconds
+  setTimeout(() => {
+     atcService.updateAgentPool(2);
+  }, 10000);
+
+  res.json({ success: true, message: `Scaled Agent Pool to 5 for conflict simulation` });
 });
 
-// Simulate Lock Request Endpoint
-app.post('/api/lock', (req, res) => {
-  console.log('POST /api/lock called');
-  try {
-    // Spawn a temporary agent to try and grab the lock
-    const requester = req.body.requester || `Ext-${Date.now()}`;
-    atcService.spawnAgent(requester);
-    res.json({ message: `Agent ${requester} spawned` });
-  } catch (error) {
-    console.error('Simulation Error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/', (req, res) => {
-  res.send('ATC Backend is Running. Connect to /api/stream for SSE.');
-});
-
-app.listen(port, () => {
-  console.log(`ATC Backend listening on port ${port}`);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
