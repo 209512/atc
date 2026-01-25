@@ -3,18 +3,20 @@ import { Activity, Lock, Unlock, Zap, Shield } from 'lucide-react';
 
 export const Metrics = ({ state }) => {
   return (
-    <div className="grid grid-cols-2 gap-4 w-full max-w-lg mt-8">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-lg mt-8">
+      <div className="col-span-1 md:col-span-3 text-center mb-2 font-mono text-sm tracking-widest animate-pulse">
+        {state.overrideSignal || state.holder?.includes('Human') ? (
+           <span className="text-red-500 font-bold">EMERGENCY: Admin in Control</span>
+        ) : (
+           <span className="text-atc-blue">AI Managing Traffic</span>
+        )}
+      </div>
+
       <MetricCard 
-        label="Holder" 
+        label="Current Controller" 
         value={state.holder || 'Idle'} 
-        color={state.holder === 'Human' ? 'text-atc-blue' : (state.holder ? 'text-atc-purple' : 'text-gray-500')}
+        color={state.holder?.includes('Human') ? 'text-atc-blue' : (state.holder ? 'text-atc-purple' : 'text-gray-500')}
         icon={<Lock className="w-4 h-4" />}
-      />
-      <MetricCard 
-        label="Fencing Token" 
-        value={state.fencingToken ? `#${state.fencingToken.slice(0, 8)}...` : 'N/A'} 
-        color="text-atc-green"
-        icon={<Shield className="w-4 h-4" />}
       />
       <MetricCard 
         label="Engine Latency" 

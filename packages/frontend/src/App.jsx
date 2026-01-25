@@ -1,47 +1,39 @@
 import { Toaster } from 'sonner';
 import { useATC } from './hooks/useATC';
-import { Radar } from './components/Radar';
-import { Metrics } from './components/Metrics';
-import { ControlPanel } from './components/ControlPanel';
+import { Sidebar } from './components/Sidebar';
+import { TerminalLog } from './components/TerminalLog';
 
 function App() {
-  const { state, triggerOverride, releaseLock, simulateConflict } = useATC();
+  const { state, triggerOverride, releaseLock, setTrafficIntensity } = useATC();
 
   return (
-    <div className="min-h-screen bg-github-dark text-gray-300 font-sans flex flex-col items-center justify-center p-8 overflow-hidden relative">
+    <div className="min-h-screen bg-[#05090a] text-gray-300 font-sans flex overflow-hidden relative">
       <Toaster position="top-center" theme="dark" />
       
-      {/* Background Ambience */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-atc-blue/5 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-atc-purple/5 rounded-full blur-[120px]" />
-      </div>
+      {/* Main Empty Area (Left) */}
+      <main className="flex-1 relative flex flex-col items-center justify-center">
+          {/* Background Ambience */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-atc-blue/5 rounded-full blur-[150px]" />
+            <div className="absolute bottom-[-20%] right-[20%] w-[40%] h-[40%] bg-atc-purple/5 rounded-full blur-[150px]" />
+          </div>
 
-      <header className="absolute top-8 left-8">
-        <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-          <span className="text-atc-blue">ATC</span> 
-          <span className="opacity-50 font-light">COMMAND CENTER</span>
-        </h1>
-        <div className="flex items-center gap-2 mt-2">
-          <div className="w-2 h-2 rounded-full bg-atc-green animate-pulse" />
-          <span className="text-xs uppercase tracking-widest opacity-60">System Online</span>
-        </div>
-      </header>
+          <div className="z-10 text-center space-y-4 select-none pointer-events-none">
+              <h1 className="text-6xl font-black tracking-tighter text-white/10">ATC CORE</h1>
+              <p className="font-mono text-sm tracking-[0.5em] opacity-30">SYSTEM VISUALIZATION</p>
+          </div>
 
-      <main className="z-10 flex flex-col items-center w-full max-w-4xl">
-        <Radar state={state} />
-        <Metrics state={state} />
-        <ControlPanel 
-            onOverride={triggerOverride} 
-            onSimulate={simulateConflict} 
-            onRelease={releaseLock}
-            isHumanHeld={state.holder === 'Human'}
-        />
+          {/* Floating Terminal Log */}
+          <TerminalLog state={state} />
       </main>
 
-      <footer className="absolute bottom-4 text-xs opacity-30 font-mono">
-        GEMINI-3-PRO // ATC-CORE v1.0.0
-      </footer>
+      {/* Right Control Sidebar */}
+      <Sidebar 
+        state={state}
+        triggerOverride={triggerOverride}
+        releaseLock={releaseLock}
+        setTrafficIntensity={setTrafficIntensity}
+      />
     </div>
   );
 }
