@@ -4,40 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 import { API_URL } from '../hooks/useATC';
 import { Radar } from './Radar';
-
-const CustomTooltip = ({ children, text, fullWidth = false, position = "top", align = "center", shiftLeft = false }) => {
-    const posClasses = {
-        top: "bottom-full mb-2",
-        bottom: "top-full mt-2",
-        left: clsx(
-            "right-full top-1/2 -translate-y-1/2",
-            shiftLeft ? "translate-x-[230px] -translate-x-1/2" : "mr-2" 
-        ),
-        right: "left-full ml-2 top-1/2 -translate-y-1/2"
-    };
-
-    const alignClasses = {
-        center: "left-1/2 -translate-x-1/2",
-        right: "right-0 translate-x-0",
-        left: "left-0 translate-x-0"
-    };
-
-    return (
-        <div className={clsx("relative group", fullWidth ? "w-full block" : "inline-block")}>
-            {children}
-            <div className={clsx(
-                "absolute opacity-0 group-hover:opacity-100 hidden group-hover:block px-2 py-1 bg-black text-white text-[10px] rounded whitespace-nowrap shadow-xl border border-gray-800 pointer-events-none",
-                "z-[10000]",
-                posClasses[position],
-                (position === 'top' || position === 'bottom') && alignClasses[align]
-            )}>
-                {text}
-                {align === 'center' && position === 'top' && <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black" />}
-                {align === 'center' && position === 'bottom' && <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-black" />}
-            </div>
-        </div>
-    );
-};
+import { CustomTooltip } from './sidebar/CustomTooltip';
+import { MetricBox } from './sidebar/MetricBox';
+import { AgentRow } from './sidebar/AgentRow';
 
 export const Sidebar = ({ state, triggerOverride, releaseLock, setTrafficIntensity }) => {
   const [agents, setAgents] = useState([]);
@@ -285,36 +254,4 @@ export const Sidebar = ({ state, triggerOverride, releaseLock, setTrafficIntensi
         </div>
     </aside>
   );
-};
-
-const MetricBox = ({ label, value, isDark, color }) => (
-    <div className={clsx("p-1.5 rounded border text-center flex flex-col items-center justify-center h-full w-full min-w-0 box-border", isDark ? "bg-gray-800/50 border-gray-700" : "bg-gray-100 border-gray-200")}>
-        <div className="text-[9px] opacity-60 font-bold mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis w-full">{label}</div>
-        <div className={clsx("font-mono font-bold text-[11px] truncate w-full px-1", color || (isDark ? "text-white" : "text-gray-900"))}>{value}</div>
-    </div>
-);
-
-const AgentRow = ({ agent, isDark, onTogglePause }) => (
-    <div className={clsx("p-2.5 rounded border flex justify-between items-center", isDark ? "bg-gray-800/40 border-gray-700" : "bg-white border-gray-200")}>
-        <div className="flex flex-col min-w-0 pr-2">
-            <div className="flex items-center gap-2 mb-1">
-                <span className="font-bold text-blue-500 text-xs">{agent.id}</span>
-                <StatusBadge status={agent.status} />
-            </div>
-            <div className="text-[10px] opacity-60 truncate">
-                {agent.resource !== 'None' && <span className="font-bold text-atc-purple mr-1">[{agent.resource}]</span>}
-                {agent.activity}
-            </div>
-        </div>
-        <CustomTooltip text={agent.status === 'PAUSED' ? "Resume" : "Pause"} position="left">
-            <button onClick={onTogglePause} className={clsx("p-1.5 rounded transition-colors", isDark ? "hover:bg-gray-700 text-gray-400" : "hover:bg-gray-200 text-gray-500")}>
-                {agent.status === 'PAUSED' ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
-            </button>
-        </CustomTooltip>
-    </div>
-);
-
-const StatusBadge = ({ status }) => {
-    const styles = { ACTIVE: "bg-green-500/20 text-green-500", WAITING: "bg-gray-500/20 text-gray-500", PAUSED: "bg-yellow-500/20 text-yellow-500", "GLOBAL STOP": "bg-red-500/20 text-red-500" };
-    return <span className={clsx("text-[9px] font-bold px-1.5 py-0.5 rounded", styles[status] || styles.WAITING)}>{status}</span>;
 };
