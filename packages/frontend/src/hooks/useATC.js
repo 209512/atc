@@ -45,20 +45,30 @@ export const useATC = () => {
   }, []);
 
   const triggerOverride = async () => {
+    // Optimistic Update
+    setState(prev => ({ ...prev, overrideSignal: true, holder: 'Human (Pending)...' }));
+    
     try {
       const res = await fetch(`${API_URL}/api/override`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         toast.success(`⚠️ AI OVERRIDE: Human Priority Executed. ${data.message}`);
+        // Backend SSE will confirm the state, but we ensure it here too if needed
       } else {
         toast.error(`Override Failed: ${data.message}`);
+        // Revert optimistic update if failed
+        setState(prev => ({ ...prev, overrideSignal: false, holder: null }));
       }
     } catch (err) {
       toast.error('Network Error during Override');
+      setState(prev => ({ ...prev, overrideSignal: false, holder: null }));
     }
   };
   
   const releaseLock = async () => {
+      // Optimistic Update
+      setState(prev => ({ ...prev, overrideSignal: false, holder: null }));
+
       try {
           await fetch(`${API_URL}/api/release`, { method: 'POST' });
           toast.info('Lock Released');
