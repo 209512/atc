@@ -1,25 +1,20 @@
-/** @type {import('tailwindcss').Config} */
-export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
+module.exports = {
+  content: ["./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
       colors: {
-        'github-dark': '#0D1117',
+        'atc-blue': '#58A6FF',
+        'atc-purple': '#BC85FF',
+        'github-dark': '#0d1117',
         'github-border': '#30363d',
-        'atc-blue': '#58A6FF',   // Human
-        'atc-purple': '#BC8CFF', // AI
-        'atc-orange': '#D29922', // Conflict
-        'atc-red': '#FF7B72',    // Alert
-        'atc-green': '#3FB950',  // Success
+        'radar-active': 'var(--color-radar-active, #22c55e)',
+        'radar-wait': 'var(--color-radar-wait, #eab308)',
+        'radar-yield': 'var(--color-radar-yield, #ef4444)',
       },
-      animation: {
-        'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'spin-slow': 'spin 3s linear infinite',
+      fontFamily: {
+        mono: ['JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', 'monospace'],
       }
     },
   },
   plugins: [],
-}
+};
