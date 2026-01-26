@@ -1,24 +1,42 @@
 const { Client } = require('hazelcast-client');  
 const getHazelcastConfig = require('../config/hazelcast.config');  
 const CONSTANTS = require('../config/constants');
+const ProviderFactory = require('./providers/ProviderFactory');
 
 class Agent {  
-  constructor(id, eventBus) {  
+  constructor(id, eventBus, config = {}) {  
     this.id = id;  
     this.eventBus = eventBus;  
+    this.config = config; // { provider: 'openai', apiKey: '...', model: '...', systemPrompt: '...' }
     this.client = null;  
     this.isRunning = false;  
+    this.provider = null;
   }  
   
+  updateConfig(newConfig) {
+    console.log(`🤖 [${this.id}] Configuration updated:`, JSON.stringify(newConfig, (k,v) => k==='apiKey'?'***':v));
+    this.config = { ...this.config, ...newConfig };
+    // Re-initialize provider if type/key changed
+    if (this.config.provider || this.config.apiKey) {
+        this.provider = ProviderFactory.create(this.config.provider || 'mock', this.config);
+        this.provider.init().catch(err => console.error(`Provider Init Error for ${this.id}:`, err));
+    }
+  }
+
   async start() {  
     if (this.isRunning) return;  
     this.isRunning = true;  
   
     try {  
       console.log(`🤖 Spawning Agent: ${this.id}`);  
+      
+      // Initialize LLM Provider
+      this.provider = ProviderFactory.create(this.config.provider || 'mock', this.config);
+      await this.provider.init().catch(e => console.warn(`Provider init warning: ${e.message}`));
+
       const config = getHazelcastConfig(this.id);  
       this.client = await Client.newHazelcastClient(config);  
-      this.stateMap = await this.client.getMap(CONSTANTS.MAP_AGENT_STATES); // Initialize state map
+      this.stateMap = await this.client.getMap(CONSTANTS.MAP_AGENT_STATES); 
       this.statusMap = await this.client.getMap(CONSTANTS.MAP_AGENT_STATUS);
       this.commandsMap = await this.client.getMap(CONSTANTS.MAP_AGENT_COMMANDS);
       this.loop();  
@@ -58,33 +76,51 @@ class Agent {
         if (this.eventBus.state.overrideSignal) {
           await this.updateStatus(CONSTANTS.STATUS_WAITING, CONSTANTS.RESOURCE_NONE, "Yielding to Human");
           await this.performBackgroundTasks("Yielding to Human");
-          await new Promise(r => setTimeout(r, CONSTANTS.AGENT_YIELD_DELAY)); // Deep yield
+          await new Promise(r => setTimeout(r, CONSTANTS.AGENT_YIELD_DELAY)); 
           continue;
+        }
+
+        // [New] Pre-Lock Admin Check: Double check before attempting lock
+        if (this.eventBus.state.overrideSignal) {
+             await new Promise(r => setTimeout(r, 1000));
+             continue;
         }
 
         await this.updateStatus(CONSTANTS.STATUS_WAITING, CONSTANTS.LOCK_NAME, "Queued for Lock");
         this.emitWaiting(this.id);   
         
-        // [Refactor] Use lease time: tryLock(wait=5000, lease=10000)
-        const acquired = await lock.tryLock(5000, 10000);   
+        // [New] Throttled Resume: Stagger lock attempts
+        const throttleDelay = Math.floor(Math.random() * 500); // 0-500ms jitter
+        await new Promise(r => setTimeout(r, throttleDelay));
+
+        // [Fixed] Capture fencing token (Long) from tryLock
+        const acquiredFence = await lock.tryLock(5000, 10000);   
           
-        if (acquired) {   
-          // Smart Recovery Check
+        if (acquiredFence) {   
+          // Recovery
           if (this.stateMap) {
              const savedContext = await this.stateMap.get('global_task_context');
              if (savedContext) {
-                console.log(`🤖 [${this.id}] Found interrupted task. Resuming from [${savedContext}]...`);
+                console.log(`🤖 [${this.id}] Found interrupted task. Resuming...`);
                 await this.stateMap.remove('global_task_context');
              }
           }
 
-          console.log(`🔒 [${this.id}] Access Granted`);   
-          // [수정] UI에 토큰 대신 ACTIVE 상태 전달
+          console.log(`🔒 [${this.id}] Access Granted (Fence: ${acquiredFence})`);   
+          
+          // [CRITICAL] Immediate Override Check after acquiring lock
+          if (this.eventBus.state.overrideSignal) {
+             console.log(`⚠️ [${this.id}] Override detected immediately after lock! Yielding...`);
+             await this.yieldLock(lock, acquiredFence, 'Immediate Yield');
+             continue;
+          }
+
           this.emitAcquired(this.id, CONSTANTS.STATUS_ACTIVE, 0);   
-          await this.updateStatus(CONSTANTS.STATUS_ACTIVE, CONSTANTS.LOCK_NAME, "Optimizing signal timing...");
+          await this.updateStatus(CONSTANTS.STATUS_ACTIVE, CONSTANTS.LOCK_NAME, "Processing Task...");
   
-          // Simulate Work with Interrupt Check
-          const yielded = await this.simulateWorkOrYield(lock);
+          // Execute Intelligent Task
+          const yielded = await this.executeTaskOrYield(lock, acquiredFence);
+
           if (yielded) {
              await this.performBackgroundTasks("Handing over to Human");
              await new Promise(r => setTimeout(r, CONSTANTS.AGENT_YIELD_DELAY));
@@ -92,12 +128,10 @@ class Agent {
           }
   
           try {  
-            // [분석 반영] 인자 없이 unlock() 호출하여 타입 에러 원천 차단
-            // SDK warning "Fencing token should be of type Long" fix: pass no args or handle inside lib
-            await lock.unlock();   
+            // [Fixed] Pass fencing token to unlock
+            await lock.unlock(acquiredFence);   
             console.log(`🔓 [${this.id}] Access Released.`);   
           } catch (unlockErr) {  
-            // SDK 버그로 인한 메시지 출력 시에도 루프는 유지
             console.warn(`⚠️ [${this.id}] Unlock notice: ${unlockErr.message}`);  
           } finally {
             this.emitReleased(this.id);
@@ -107,8 +141,7 @@ class Agent {
           await new Promise(r => setTimeout(r, 500));   
         } else {   
           // Productive Idle
-          await this.updateStatus(CONSTANTS.STATUS_IDLE, CONSTANTS.RESOURCE_NONE, "Performing background analysis...");
-          await this.performBackgroundTasks("No lock acquired");
+          await this.updateStatus(CONSTANTS.STATUS_IDLE, CONSTANTS.RESOURCE_NONE, "Idle / Analysis");
           this.emitCollision();   
           await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));   
         }   
@@ -126,48 +159,61 @@ class Agent {
   async updateStatus(status, resource, activity) {
       if (this.statusMap) {
           try {
+              // Use provider name if model is not set, to confirm hot-swap
+              const displayModel = this.config.model || this.config.provider || 'Mock';
               await this.statusMap.put(this.id, {
                   id: this.id,
                   status,
                   resource,
                   activity,
+                  model: displayModel,
                   lastUpdated: Date.now()
               });
-          } catch (e) {
-              // ignore map errors
-          }
+          } catch (e) {}
       }
   }  
 
   async performBackgroundTasks(reason) {
-     // Throttle logs
      const now = Date.now();
      if (!this.lastTaskTime || now - this.lastTaskTime > 4000) {
-        console.log(`📊 [${this.id}] ${reason}. Performing background analysis...`);
         this.lastTaskTime = now;
      }
-     // Simulate CPU work
      await new Promise(r => setTimeout(r, 200));
   }
 
-  async simulateWorkOrYield(lock) {
-     for (let i = 0; i < CONSTANTS.AGENT_WORK_STEPS; i++) { // 4 * 500ms = 2s
-        if (this.eventBus.state.overrideSignal) {
-            console.log(`⚠️ [${this.id}] Override detected! Saving context and yielding...`);
-            if (this.stateMap) {
-                await this.stateMap.put('global_task_context', `Task-by-${this.id}-Step-${i}`);
-            }
-            try {
-                await lock.unlock();
-            } catch (e) {
-                console.warn(`Force unlock failed: ${e.message}`);
-            }
-            this.emitReleased(this.id);
-            return true; // Yielded
-        }
-        await new Promise(r => setTimeout(r, CONSTANTS.AGENT_WORK_STEP_DELAY));
+  async executeTaskOrYield(lock, fence) {
+     // 1. Check for override
+     if (this.eventBus.state.overrideSignal) {
+         return await this.yieldLock(lock, fence, 'Pre-computation yield');
      }
-     return false; // Completed
+
+     // 2. Perform LLM Call
+     const taskPrompt = `Current time is ${new Date().toISOString()}. Analyze traffic patterns and suggest optimal routing.`;
+     console.log(`🧠 [${this.id}] Generating response using ${this.config.provider || 'Mock'}...`);
+     
+     const response = await this.provider.generateResponse(taskPrompt, this.config.systemPrompt);
+     
+     console.log(`📝 [${this.id}] Output: ${response.substring(0, 50)}...`);
+     
+     // 3. Simulate processing time
+     await new Promise(r => setTimeout(r, 1000));
+
+     // 4. Check for override again
+     if (this.eventBus.state.overrideSignal) {
+        return await this.yieldLock(lock, fence, 'Post-computation yield');
+     }
+
+     return false; // Completed successfully
+  }
+
+  async yieldLock(lock, fence, context) {
+      console.log(`⚠️ [${this.id}] Override! Yielding (${context})...`);
+      if (this.stateMap) {
+          await this.stateMap.put('global_task_context', `Interrupted: ${this.id} at ${context}`);
+      }
+      try { await lock.unlock(fence); } catch (e) { console.warn(`Force unlock failed: ${e.message}`); }
+      this.emitReleased(this.id);
+      return true;
   }
   
   emitAcquired(holder, token, latency) {  
@@ -189,11 +235,7 @@ class Agent {
   async stop() {  
     this.isRunning = false;  
     if (this.client) {
-      try {  
-        await this.client.shutdown();
-      } catch (e) {
-        // Ignore shutdown errors
-      }  
+      try { await this.client.shutdown(); } catch (e) {}  
     }  
   }  
 }  

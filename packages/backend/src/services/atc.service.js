@@ -7,6 +7,7 @@ class ATCService extends EventEmitter {
   constructor() {  
     super();  
     this.agents = new Map();  
+    this.agentConfigs = new Map(); 
     this.state = {  
       resourceId: `traffic-control-lock-${Date.now()}`,  
       holder: null,  
@@ -15,7 +16,7 @@ class ATCService extends EventEmitter {
       overrideSignal: false,  
       fencingToken: null,  
       latency: 0,
-      activeAgentCount: 0, // [New] Track explicit pool size
+      activeAgentCount: 0, 
       timestamp: Date.now(),
       globalStop: false
     };  
@@ -33,20 +34,28 @@ class ATCService extends EventEmitter {
       console.error('Failed to initialize ATC Service:', err);  
     }  
   }  
+
+  registerAgentConfig(id, config) {
+      console.log(`📋 Registering config for ${id}: ${config.provider}/${config.model}`);
+      this.agentConfigs.set(id, config);
+      if (this.agents.has(id)) {
+          const agent = this.agents.get(id);
+          agent.updateConfig(config);
+      }
+  }
   
+  // Renamed from updateAgentPool to better reflect "System Congestion" control logic if needed,
+  // but for now keeping it as pool scaler.
   async updateAgentPool(targetCount) {
+    if (targetCount > 10) targetCount = 10; // Hard Limit
     if (this.updateTimeout) clearTimeout(this.updateTimeout);
-    
     this.updateTimeout = setTimeout(() => {
        this._executeScaling(targetCount);
     }, 300);
   }
 
   async _executeScaling(targetCount) {
-    if (this.scalingInProgress) {
-        console.warn('⚠️ Scaling already in progress, skipping...');
-        return;
-    }
+    if (this.scalingInProgress) return;
     this.scalingInProgress = true;
     
     try {
@@ -54,35 +63,37 @@ class ATCService extends EventEmitter {
         for (let i = 1; i <= targetCount; i++) {  
           const agentId = `Agent-${i}`;  
           if (!this.agents.has(agentId)) {  
-            const agent = new Agent(agentId, this);  
+            const config = this.agentConfigs.get(agentId) || { provider: 'mock', model: 'simulation-v1' };
+            const agent = new Agent(agentId, this, config);  
             this.agents.set(agentId, agent);  
             agent.start();  
           }  
         }  
         const currentIds = Array.from(this.agents.keys());  
         for (const id of currentIds) {  
-          const agentNum = parseInt(id.split('-')[1]);  
+          const agentNum = parseInt(id.split('-')[1]); // Assumes Agent-N naming for auto-scaling
           if (agentNum > targetCount) {  
-            const agent = this.agents.get(id);  
-            if (agent) {
-                try {
-                    await agent.stop();
-                } catch (e) {
-                    console.warn(`Error stopping agent ${id}:`, e.message);
-                }
-            }
-            this.agents.delete(id);  
-            console.log(`🔻 Scaled down: ${id}`);  
+            await this.terminateAgent(id);
           }  
         }
         
-        // [New] Update state with accurate count
         this.state.activeAgentCount = this.agents.size;
         this.emitState();
     } finally {
         this.scalingInProgress = false;
     }
   }  
+
+  async terminateAgent(id) {
+      const agent = this.agents.get(id);
+      if (agent) {
+          console.log(`🔻 Terminating Agent: ${id}`);
+          try { await agent.stop(); } catch (e) {}
+          this.agents.delete(id);
+          this.state.activeAgentCount = this.agents.size;
+          this.emitState();
+      }
+  }
   
   async startSimulation(count = 2) {  
     await this.updateAgentPool(count);  
@@ -96,28 +107,18 @@ class ATCService extends EventEmitter {
     try {  
       const cp = hazelcastManager.getCPSubsystem();  
       const lock = await cp.getLock(this.state.resourceId);  
+      await new Promise(r => setTimeout(r, CONSTANTS.HUMAN_OVERRIDE_DELAY + 200));
+      const acquiredFence = await lock.tryLock(3000);  
         
-      // Wait briefly to let agents detect signal and yield
-      await new Promise(r => setTimeout(r, CONSTANTS.HUMAN_OVERRIDE_DELAY));
-
-      // Use longer timeout to guarantee acquisition
-      const acquired = await lock.tryLock(CONSTANTS.LOCK_TIMEOUT);  
-        
-      if (acquired) {  
-        const fence = CONSTANTS.ADMIN_FENCE;  
-        console.log(`🚨 [Admin] Override Successful`);  
-          
+      if (acquiredFence) {  
+        console.log(`🚨 [Admin] Override Successful (Fence: ${acquiredFence})`);  
         this.state.holder = 'Human (Admin)';  
-        this.state.fencingToken = fence;  
-        // Keep signal TRUE so agents continue to yield while Admin works
+        this.state.fencingToken = acquiredFence;  
         this.state.overrideSignal = true;  
         this.state.waitingAgents = [];  
         this.emitState();  
         return { success: true, message: 'Override Successful' };  
       } else {  
-        // If we can't get it, force reset? 
-        // Or just fail and let user try again.
-        // Failing fast is better for UI.
         console.warn('Override: Could not acquire lock in 2s');
         this.state.overrideSignal = false;  
         this.emitState();  
@@ -135,23 +136,23 @@ class ATCService extends EventEmitter {
     try {  
       const cp = hazelcastManager.getCPSubsystem();  
       const lock = await cp.getLock(this.state.resourceId);  
-      
-      // Force unlock safely
       try {
         if (await lock.isLocked()) {
-          // In a real app we check ownership, but here we assume we are the only admin session
-          await lock.unlock();
+          if (this.state.fencingToken) {
+              await lock.unlock(this.state.fencingToken);
+          } else {
+              await lock.unlock(); 
+          }
           console.log('🚨 [Human] Released Lock.');
         } else {
              console.log('[Human] Lock was already released.');
         }
       } catch (unlockErr) {  
         console.warn('Human Release notice:', unlockErr.message);  
-        // Even if unlock fails, we must reset state
       } finally {
         this.state.holder = null;  
         this.state.fencingToken = null;
-        this.state.overrideSignal = false; // Release the agents  
+        this.state.overrideSignal = false; 
         this.emitState();  
       }
     } catch (err) {  
@@ -161,7 +162,6 @@ class ATCService extends EventEmitter {
   
   async toggleGlobalStop(enable) {
       this.state.globalStop = enable;
-      // Also update Hazelcast map if needed, but local state is propagated via event bus to agents
       this.emitState();
   }
 
@@ -177,17 +177,48 @@ class ATCService extends EventEmitter {
       }
   }
 
+  async renameAgent(oldId, newId) {
+      if (!this.agents.has(oldId)) return false;
+      
+      const agent = this.agents.get(oldId);
+      agent.id = newId; // Update internal ID
+      
+      this.agents.delete(oldId);
+      this.agents.set(newId, agent);
+      
+      // Update config map key if needed
+      if (this.agentConfigs.has(oldId)) {
+          const config = this.agentConfigs.get(oldId);
+          this.agentConfigs.delete(oldId);
+          this.agentConfigs.set(newId, config);
+      }
+      
+      console.log(`🏷️ Renamed Agent: ${oldId} -> ${newId}`);
+      this.emitState();
+      return true;
+  }
+
   async getAgentStatus() {
       const client = hazelcastManager.getClient();
       if (client) {
           const map = await client.getMap(CONSTANTS.MAP_AGENT_STATUS);
           const entrySet = await map.entrySet();
-          // Convert to array
           const statusList = [];
+          
+          // Only return status for currently active agents in memory to avoid stale data
+          // or filter based on timestamp
+          const now = Date.now();
           for (const entry of entrySet) {
-             statusList.push(entry[1]);
+             // If agent is managed by this service instance
+             // For distributed, we'd trust the map, but for this single-node demo:
+             if (this.agents.has(entry[1].id)) {
+                 statusList.push(entry[1]);
+             } else if (now - entry[1].lastUpdated < 5000) {
+                 // Keep recently active distributed agents
+                 statusList.push(entry[1]);
+             }
           }
-          return statusList.sort((a, b) => a.id.localeCompare(b.id));
+          return statusList.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
       }
       return [];
   }
