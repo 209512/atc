@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import Draggable from 'react-draggable';
 import { Activity, X, ChevronDown, ChevronUp, Play, Square, Edit2, Trash2, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,17 +19,26 @@ export const AgentTacticalPanel = ({
     renamingId,
     setRenamingId,
     newName,
-    setNewName
+    setNewName,
+    sidebarWidth = 450
 }) => {
     const nodeRef = useRef(null);
     const [isOpen, setIsOpen] = useState(true);
 
     return (
         <Draggable nodeRef={nodeRef} handle=".tactical-handle" bounds="body">
-            <div ref={nodeRef} className={clsx("fixed top-20 right-20 w-80 rounded-xl border shadow-2xl backdrop-blur-md z-50 overflow-hidden flex flex-col max-h-[600px]", isDark ? "bg-[#0d1117]/95 border-gray-700" : "bg-white/95 border-gray-200")}>
+            <div 
+                ref={nodeRef} 
+                className={clsx("fixed top-20 w-80 rounded-xl border shadow-2xl backdrop-blur-md z-40 overflow-hidden flex flex-col max-h-[600px] transition-all duration-300", 
+                isDark ? "bg-[#0d1117]/95 border-gray-700" : "bg-white/90 border-slate-400 shadow-xl"
+            )}
+            style={{ right: sidebarWidth + 20 }}
+            >
                 {/* Header */}
-                <div className="tactical-handle p-3 border-b border-gray-700/50 flex justify-between items-center cursor-move bg-gradient-to-r from-gray-900/50 to-transparent hover:bg-gray-800/50 transition-colors select-none">
-                     <h3 className="text-xs font-bold flex items-center gap-2 opacity-90 text-atc-blue">
+                <div className={clsx("tactical-handle p-3 border-b flex justify-between items-center cursor-move transition-colors select-none",
+                     isDark ? "border-gray-700/50 bg-gradient-to-r from-gray-900/50 to-transparent hover:bg-gray-800/50" : "border-slate-200/50 bg-gradient-to-r from-slate-100/50 to-transparent hover:bg-slate-100/50"
+                )}>
+                     <h3 className={clsx("text-xs font-bold flex items-center gap-2 opacity-90", isDark ? "text-atc-blue" : "text-blue-600")}>
                         <Activity className="w-3.5 h-3.5" /> 
                         TACTICAL_NET ({agents.length})
                      </h3>
@@ -50,19 +59,19 @@ export const AgentTacticalPanel = ({
                             initial={{ height: 0, opacity: 0 }} 
                             animate={{ height: 'auto', opacity: 1 }} 
                             exit={{ height: 0, opacity: 0 }} 
-                            className="overflow-y-auto custom-scrollbar p-2 space-y-2 bg-black/20"
+                            className={clsx("overflow-y-auto custom-scrollbar p-2 space-y-2", isDark ? "bg-black/20" : "bg-slate-100/20")}
                         >
                             {agents.length === 0 && <div className="text-center text-[10px] opacity-40 py-4 font-mono">NO ACTIVE SIGNALS</div>}
                             
                             {agents.map(agent => (
                                 <div key={agent.id} className="relative group">
                                     {renamingId === agent.id ? (
-                                        <div className="flex gap-1 p-2 bg-black/40 rounded border border-atc-blue/30 items-center">
+                                        <div className={clsx("flex gap-1 p-2 rounded border items-center", isDark ? "bg-black/40 border-atc-blue/30" : "bg-white/40 border-blue-500/30")}>
                                             <input 
                                                 autoFocus
                                                 value={newName}
                                                 onChange={(e) => setNewName(e.target.value)}
-                                                className="flex-1 bg-transparent text-xs outline-none font-mono text-white"
+                                                className={clsx("flex-1 bg-transparent text-xs outline-none font-mono", isDark ? "text-white" : "text-slate-800")}
                                                 placeholder="NEW_CALLSIGN"
                                             />
                                             <button onClick={submitRename} className="p-1 hover:bg-green-500/20 rounded"><Check className="w-3 h-3 text-green-500" /></button>
@@ -74,8 +83,6 @@ export const AgentTacticalPanel = ({
                                             isDark={isDark} 
                                             onTogglePause={() => onTogglePause(agent.id, agent.status)}
                                             disabled={isHuman}
-                                            // Only render lock icon if holder, no extra styling here to keep it clean in tactical view? 
-                                            // Actually user wants rename/terminate here.
                                             renderExtras={() => (
                                                 <div className="flex gap-1 ml-2">
                                                     <button onClick={() => startRenaming(agent)} className="p-1.5 hover:bg-blue-500/20 rounded text-gray-400 hover:text-atc-blue transition-colors" title="Rename Callsign">
