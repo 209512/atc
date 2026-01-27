@@ -4,11 +4,11 @@ const CONSTANTS = require('../config/constants');
 const ProviderFactory = require('./providers/ProviderFactory');
 
 class Agent {  
-  constructor(id, eventBus, config = {}) {  
+  constructor(id, eventBus, config = {}, sharedClient = null) {  
     this.id = id;  
     this.eventBus = eventBus;  
     this.config = config; // { provider: 'openai', apiKey: '...', model: '...', systemPrompt: '...' }
-    this.client = null;  
+    this.client = sharedClient; // Shared Client Injection
     this.isRunning = false;  
     this.provider = null;
   }  
@@ -34,8 +34,13 @@ class Agent {
       this.provider = ProviderFactory.create(this.config.provider || 'mock', this.config);
       await this.provider.init().catch(e => console.warn(`Provider init warning: ${e.message}`));
 
-      const config = getHazelcastConfig(this.id);  
-      this.client = await Client.newHazelcastClient(config);  
+      if (!this.client) {
+          // Fallback if no shared client (should not happen in optimized mode)
+          const config = getHazelcastConfig(this.id);  
+          this.client = await Client.newHazelcastClient(config);  
+          this.ownsClient = true;
+      }
+
       this.stateMap = await this.client.getMap(CONSTANTS.MAP_AGENT_STATES); 
       this.statusMap = await this.client.getMap(CONSTANTS.MAP_AGENT_STATUS);
       this.commandsMap = await this.client.getMap(CONSTANTS.MAP_AGENT_COMMANDS);
@@ -92,6 +97,18 @@ class Agent {
         // [New] Throttled Resume: Stagger lock attempts
         const throttleDelay = Math.floor(Math.random() * 500); // 0-500ms jitter
         await new Promise(r => setTimeout(r, throttleDelay));
+
+        // [OPTIMIZATION] Check if lock is held by ANYONE locally via EventBus before hitting network
+        // This prevents re-entrancy if sharing client and reduces network chatter
+        if (this.eventBus.state.holder) {
+            // Someone holds it. Since we share client, tryLock might succeed (reentrant)
+            // so we MUST NOT attempt if we know it's held by another agent ID.
+            if (this.eventBus.state.holder !== this.id) {
+                this.emitCollision();
+                await new Promise(r => setTimeout(r, 1000));
+                continue;
+            }
+        }
 
         // [Fixed] Capture fencing token (Long) from tryLock
         const acquiredFence = await lock.tryLock(5000, 10000);   
@@ -234,7 +251,7 @@ class Agent {
   
   async stop() {  
     this.isRunning = false;  
-    if (this.client) {
+    if (this.client && this.ownsClient) {
       try { await this.client.shutdown(); } catch (e) {}  
     }  
   }  

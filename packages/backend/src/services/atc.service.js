@@ -30,6 +30,9 @@ class ATCService extends EventEmitter {
   async init() {  
     try {  
       await hazelcastManager.init();  
+      this.sharedClient = hazelcastManager.getClient();
+      // Start with initial pool
+      await this.updateAgentPool(2);
     } catch (err) {  
       console.error('Failed to initialize ATC Service:', err);  
     }  
@@ -99,7 +102,8 @@ class ATCService extends EventEmitter {
                 const candidateId = `Agent-${candidateNum}`;
                 if (!this.agents.has(candidateId)) {
                     const config = this.agentConfigs.get(candidateId) || { provider: 'mock', model: 'simulation-v1' };
-                    const agent = new Agent(candidateId, this, config);
+                    // Inject Shared Client
+                    const agent = new Agent(candidateId, this, config, this.sharedClient);
                     this.agents.set(candidateId, agent);
                     agent.start();
                     added++;
