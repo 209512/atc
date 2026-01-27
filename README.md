@@ -1,91 +1,70 @@
-# Agent Traffic Control (ATC)
+# ATC (AI Traffic Control) System
 
-ATC is a **traffic control system designed for AI agents**. It manages concurrency and resolves conflicts when multiple agents attempt to access shared files or resources simultaneously. Just as air traffic control manages airspace to prevent collisions, ATC ensures smooth operation and resource integrity among autonomous agents.
+The **ATC System** is a distributed AI agent management platform designed to visualize and control concurrent agent activities in real-time. It simulates a high-stakes "Air Traffic Control" environment where AI agents compete for resources (locks) to perform tasks, while a human administrator retains ultimate override authority.
 
-## 🚀 Live Demo & Repository
+## 🚀 Key Features
 
-- **Live Deployment:** [https://atc-frontend-eight.vercel.app/](https://atc-frontend-eight.vercel.app/)
-- **GitHub Repository:** [https://github.com/209512/atc.git](https://github.com/209512/atc.git)
+### 📡 Real-time Visualization
+- **3D Radar Interface:** Interactive 3D visualization using **React Three Fiber** showing agent positions, lock status, and activity.
+- **Visual Feedback:** Dynamic color coding for Agent states (Idle, Active, Locked, Human Override) and particle effects for data transmission.
+- **Detachable View:** Radar can be detached to a full-screen "Main View" for immersive monitoring.
 
-## 💡 Concept
+### 🎮 Human-in-the-Loop Control
+- **Emergency Takeover:** Instant administrative lock override (`RELEASE LOCK` / `EMERGENCY TAKEOVER`) to prevent collisions or halt rogue agents.
+- **Traffic Intensity Control:** Adjustable system congestion (agent pool size) via a dedicated slider.
+- **Tactical Panel:** Drag-and-drop interface to manage, rename, pause, or terminate specific agents.
 
-In multi-agent systems, agents often work autonomously on shared tasks. Problems arise when:
-- Multiple agents try to write to the same file at once.
-- Two agents attempt to use a limited API quota or database connection simultaneously.
+### 🔐 Distributed Coordination
+- **Hazelcast Locking:** Implements distributed locking primitives (Fencing Tokens) to ensure mutual exclusion between agents.
+- **Race Condition Handling:** robust logic to handle lock acquisition latency and immediate human preemption.
 
-**Agent Traffic Control** solves this by acting as a central authority that:
-- Monitors agent activities.
-- Detects potential resource collisions.
-- Manages locks and queues to serialize access.
-- Visualizes the entire process in real-time.
+### 🛠 Modern UI/UX
+- **Responsive Design:** Fully responsive layout with a collapsible sidebar and flexible main content area.
+- **Themes:** Toggle between **Cyberpunk Dark Mode** (Deep Space) and **Clean Light Mode** (Corporate).
+- **SoundFX:** Audio feedback for system events (Lock Acquired, Alarm, Override), with granular mute controls (SYS/NET).
 
-## 🛠️ Tech Stack
+## 🏗 Architecture
 
-### Frontend
-- **Framework:** React 19
-- **Build Tool:** Vite
-- **Styling:** Tailwind CSS, clsx, tailwind-merge
-- **Animation:** Framer Motion
-- **Icons:** Lucide React
-- **UI Logic:** React Draggable, React Resizable
+The project is structured as a monorepo:
 
-### Backend
-- **Runtime:** Node.js
-- **Framework:** Express.js 5
-- **Distributed System:** Hazelcast (for distributed locking and state management)
-- **Utilities:** dotenv, cors
+### `packages/backend` (Node.js + Express)
+- **Core Service (`atc.service.js`):** Manages the simulation loop, agent lifecycle, and global state.
+- **Agent Simulation (`Agent.js`):** Independent agent instances that autonomously loop, request locks, and simulate LLM tasks.
+- **Locking (`HazelcastManager.js`):** Interacts with Hazelcast Cloud for distributed CP (Consistency/Partition Tolerance) locking.
+- **API:** REST endpoints for control and SSE (Server-Sent Events) for real-time state streaming.
 
-## 📖 Getting Started
+### `packages/frontend` (React + Vite + Tailwind)
+- **State Management:** Custom `useATC` hook handling SSE streams and optimistic UI updates.
+- **Components:**
+  - `Sidebar`: Main control center.
+  - `Radar`: 3D visualization.
+  - `TerminalLog`: Real-time system log with filter capabilities.
+  - `AgentTacticalPanel`: Floating window for specific agent operations.
+
+## 📦 Installation & Setup
 
 ### Prerequisites
-- Node.js (v18 or higher recommended)
-- A Hazelcast Cloud Cluster (or local instance)
+- Node.js (v18+)
+- Hazelcast Cloud Cluster (or local instance)
 
-### Installation
-
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/209512/atc.git
-    cd atc
-    ```
-
-2.  **Install Frontend Dependencies:**
-    ```bash
-    cd packages/frontend
-    npm install
-    ```
-
-3.  **Install Backend Dependencies:**
-    ```bash
-    cd ../backend
-    npm install
-    ```
-
-### Configuration
-
-Create a `.env` file in the `packages/backend` directory based on `.env.example`:
-
+### 1. Backend Setup
 ```bash
-# packages/backend/.env
-HAZELCAST_DISCOVERY_TOKEN=your_token_here
-HAZELCAST_PASSWORD=your_password_here
-# Optional
-PORT=3000
+cd packages/backend
+npm install
+# Configure .env and certs/ for Hazelcast (see .env.example)
+node index.js
 ```
 
-### Running the Application
+### 2. Frontend Setup
+```bash
+cd packages/frontend
+npm install
+npm run dev
+```
 
-1.  **Start the Backend:**
-    ```bash
-    cd packages/backend
-    node index.js
-    ```
-    The server will start (default port: 3000).
+## 🛡️ Security & Scalability
+- **Hard Limits:** Agent scaling is capped at 10 to prevent resource exhaustion in this demo environment.
+- **Override Priority:** Human commands always preempt AI locks via Fencing Tokens.
 
-2.  **Start the Frontend:**
-    Open a new terminal and run:
-    ```bash
-    cd packages/frontend
-    npm run dev
-    ```
-    Access the dashboard at `http://localhost:5173`.
+## 📝 License
+ISC
