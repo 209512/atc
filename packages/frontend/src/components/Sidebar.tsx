@@ -1,526 +1,513 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Pause, Play, Activity, Sun, Moon, Fingerprint, Shield, ChevronDown, ChevronUp, Square, Volume2, VolumeX, Settings, Radar as RadarIcon, Mic, MicOff, Radio, Maximize2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useRef } from 'react';
 import clsx from 'clsx';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-
-import { API_URL } from '../hooks/useATC';
 import { Radar } from './Radar';
-import { CustomTooltip } from './sidebar/CustomTooltip';
-import { MetricBox } from './sidebar/MetricBox';
-import { AgentRow } from './sidebar/AgentRow';
-import { AgentSettings } from './sidebar/AgentSettings';
 import { AgentTacticalPanel } from './AgentTacticalPanel';
+import { AgentSettings } from './sidebar/AgentSettings';
+import { Tooltip } from './Tooltip';
+import { 
+    Play, Pause, Square, Lock, Unlock, 
+    Activity, ShieldAlert, Cpu, Radio,
+    Volume2, VolumeX, Speaker, MicOff,
+    MoreHorizontal, Settings, GripVertical, ChevronDown, X
+} from 'lucide-react';
+import { useATC } from '../context/ATCContext';
 
-// --- Sortable Item Wrapper ---
-function SortableAgentRow({ agent, isDark, togglePause, isHuman, isHolder, isSelected, onClick }) {
+export const Sidebar = () => {
   const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({ id: agent.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-  
-  // Auto-scroll into view when selected
-  const rowRef = useRef(null);
-  useEffect(() => {
-      if (isSelected && rowRef.current) {
-          rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-  }, [isSelected]);
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onClick}>
-       <div ref={rowRef}>
-           <AgentRow 
-                agent={agent} 
-                isDark={isDark} 
-                onTogglePause={() => togglePause(agent.id, agent.status)}
-                disabled={isHuman} 
-                isHolder={isHolder}
-                className={clsx(isSelected && (isDark ? "ring-2 ring-blue-500 bg-blue-500/10" : "ring-2 ring-blue-500 bg-blue-50"))}
-            />
-       </div>
-    </div>
-  );
-}
-
-export const Sidebar = ({ 
-    state, 
-    triggerOverride, 
-    releaseLock, 
-    setTrafficIntensity, 
-    isDark, 
+    state,
+    triggerOverride,
+    releaseLock,
+    setTrafficIntensity,
+    isDark,
     setIsDark,
     agents,
-    setAgents,
     viewMode,
     setViewMode,
     selectedAgentId,
     setSelectedAgentId,
-    isAdminMuted, // Prop from App.tsx
-    setIsAdminMuted, // Prop from App.tsx
-    isAgentMuted, // Prop from App.tsx
-    setIsAgentMuted, // Prop from App.tsx
-    width,
-    setWidth
-}) => {
-  const resizerRef = useRef(null);
+    isAdminMuted,
+    setIsAdminMuted,
+    isAgentMuted,
+    setIsAgentMuted,
+    sidebarWidth,
+    setSidebarWidth: setWidth,
+    // New Actions
+    terminateAgent,
+    togglePause,
+    toggleGlobalStop,
+  } = useATC();
 
-  const [globalStop, setGlobalStop] = useState(false);
-  const [opacity, setOpacity] = useState(100);
-  const [sliderValue, setSliderValue] = useState(2);
-  const [isOverrideLoading, setIsOverrideLoading] = useState(false);
-  const [isAgentListOpen, setIsAgentListOpen] = useState(true);
-  const [uptime, setUptime] = useState(0);
+  const resizerRef = useRef<HTMLDivElement>(null);
   
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  
-  // Tactical Panel State
-  const [renamingId, setRenamingId] = useState(null);
-  const [newName, setNewName] = useState('');
-  
-  // Radar Toggle (Local visibility in Sidebar)
-  const [showRadar, setShowRadar] = useState(true);
+  // Local UI state can remain here if it's purely for Sidebar animation/interaction
+  // or moved to Context if needed globally. Keeping simple UI state local is fine.
+  const [opacity, setOpacity] = React.useState(100);
+  const [sliderValue, setSliderValue] = React.useState(2);
+  const [isOverrideLoading, setIsOverrideLoading] = React.useState(false);
+  const [isAgentListOpen, setIsAgentListOpen] = React.useState(true);
+  const [uptime, setUptime] = React.useState(0);
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+  const [renamingId, setRenamingId] = React.useState(null);
+  const [newName, setNewName] = React.useState('');
+  const [showRadar, setShowRadar] = React.useState(true);
+  const [isResizing, setIsResizing] = React.useState(false);
 
-  // Sidebar Resizing
-  const [isResizing, setIsResizing] = useState(false);
-
-  // DND Sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  useEffect(() => {
-    if (state.activeAgentCount !== undefined) setSliderValue(state.activeAgentCount);
-  }, [state.activeAgentCount]);
-
-  useEffect(() => {
-      const start = Date.now();
-      const timer = setInterval(() => setUptime(Math.floor((Date.now() - start) / 1000)), 1000);
-      return () => clearInterval(timer);
+  React.useEffect(() => {
+    const timer = setInterval(() => setUptime(u => u + 1), 1000);
+    return () => clearInterval(timer);
   }, []);
 
-  // Resizing Logic
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-        if (!isResizing) return;
-        const newWidth = window.innerWidth - e.clientX;
-        if (newWidth > 300 && newWidth < 800) {
-            setWidth(newWidth);
-        }
-    };
+  // Update slider when active count changes (external update)
+  React.useEffect(() => {
+      if (state.activeAgentCount !== undefined) {
+          setSliderValue(state.activeAgentCount);
+      }
+  }, [state.activeAgentCount]);
 
-    const handleMouseUp = () => {
-        setIsResizing(false);
-        document.body.style.cursor = 'default';
-    };
-
-    if (isResizing) {
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-        document.body.style.cursor = 'col-resize';
-    }
-
-    return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizing]);
-
-
-  const handleScale = (val) => { setSliderValue(val); setTrafficIntensity(val); };
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = parseInt(e.target.value);
+      setSliderValue(val);
+      setTrafficIntensity(val);
+  };
 
   const handleOverride = async () => {
     setIsOverrideLoading(true);
-    try { await triggerOverride(); } finally { setIsOverrideLoading(false); }
+    await triggerOverride();
+    setTimeout(() => setIsOverrideLoading(false), 500);
   };
 
-  const toggleGlobalStop = async () => {
-      const newState = !globalStop;
-      setGlobalStop(newState);
-      await fetch(`${API_URL}/api/stop`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ enable: newState })
-      });
+  const formatUptime = (sec: number) => {
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
   };
 
-  const togglePause = async (id, currentStatus) => {
-      const isPaused = currentStatus === 'PAUSED';
-      await fetch(`${API_URL}/api/agents/${id}/pause`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pause: !isPaused })
-      });
-  };
+    // Resizing Logic - Direct DOM Manipulation for 0ms Latency
+    const handleMouseDown = (e: React.MouseEvent) => {
+        setIsResizing(true);
+        e.preventDefault();
+        
+        // Disable transitions on sidebar during drag
+        if (sidebarRef.current) {
+            sidebarRef.current.style.transition = 'none';
+        }
+    };
 
-  const terminateAgent = async (id) => {
-      await fetch(`${API_URL}/api/agents/${id}`, { method: 'DELETE' });
-  };
+    // Ref for the sidebar element to manipulate directly
+    const sidebarRef = useRef<HTMLDivElement>(null);
 
-  const startRenaming = (agent) => {
-      setRenamingId(agent.id);
-      setNewName(agent.id);
-  };
-
-  const submitRename = async () => {
-      if (newName && newName !== renamingId) {
-          await fetch(`${API_URL}/api/agents/${renamingId}/rename`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ newId: newName })
-          });
+    React.useEffect(() => {
+      const handleMouseMove = (e: MouseEvent) => {
+          if (!isResizing) return;
+          
+          // Direct DOM manipulation
+          const newWidth = window.innerWidth - e.clientX;
+          if (newWidth > 300 && newWidth < 800) {
+              if (sidebarRef.current) {
+                  sidebarRef.current.style.width = `${newWidth}px`;
+                  // Also update the resizer position if it's separate, but here it's absolute right of screen - width
+                  // Actually resizer is fixed right: sidebarWidth. So we need to update that too if it's not child of sidebar.
+                  // Resizer is: style={{ right: sidebarWidth }}
+                  if (resizerRef.current) {
+                      resizerRef.current.style.right = `${newWidth}px`;
+                  }
+              }
+          }
+      };
+  
+      const handleMouseUp = (e: MouseEvent) => {
+          if (isResizing) {
+            setIsResizing(false);
+            // Sync final state
+            const newWidth = window.innerWidth - e.clientX;
+             if (newWidth > 300 && newWidth < 800) {
+                setWidth(newWidth);
+             }
+             // Re-enable transitions if needed (though we removed them globally for perf)
+          }
+      };
+  
+      if (isResizing) {
+          window.addEventListener('mousemove', handleMouseMove);
+          window.addEventListener('mouseup', handleMouseUp);
+          document.body.style.cursor = 'col-resize';
+          document.body.style.userSelect = 'none';
+      } else {
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
       }
-      setRenamingId(null);
-  };
   
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
-    
-    if (active.id !== over.id) {
-      setAgents((items) => {
-        const oldIndex = items.findIndex(i => i.id === active.id);
-        const newIndex = items.findIndex(i => i.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
-      });
-    }
-  };
+      return () => {
+          window.removeEventListener('mousemove', handleMouseMove);
+          window.removeEventListener('mouseup', handleMouseUp);
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+      };
+    }, [isResizing, setWidth]);
 
-  const formatTime = (seconds) => {
-      const mins = Math.floor(seconds / 60);
-      const secs = seconds % 60;
-      return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
-  const successRate = state.collisionCount > 0 ? Math.max(0, 100 - (state.collisionCount * 2)) : 100;
-  const isHuman = state.holder?.includes('Human');
-  
+  const isHuman = state.holder && state.holder.includes('Human');
+
   return (
-    <>
+      <>
+        {/* Resizer Handle */}
+        <div 
+            ref={resizerRef}
+            className="fixed top-0 bottom-0 z-[60] w-1 cursor-col-resize hover:bg-blue-500/50 transition-colors"
+            style={{ right: sidebarWidth }}
+            onMouseDown={handleMouseDown}
+        />
+
             {/* Integrated Sidebar (Right) */}
             <aside 
+                ref={sidebarRef}
                 className={clsx(
-                    "h-full border-l flex flex-col transition-all duration-500 shadow-2xl backdrop-blur-md z-50 pointer-events-auto relative shrink-0 overflow-hidden",
+                    "h-full border-l flex flex-col transition-none shadow-2xl backdrop-blur-md z-50 pointer-events-auto relative shrink-0 overflow-visible",
                     isDark ? "bg-[#0d1117]/90 border-gray-800 text-gray-300" : "bg-slate-50/80 border-slate-200/40 text-slate-800"
                 )}
-                style={{ opacity: opacity / 100, width }}
+                style={{ opacity: opacity / 100, width: sidebarWidth }}
             >
-                {/* Resizer Handle */}
-                <div 
-                    ref={resizerRef}
-                    className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-atc-blue/50 z-50 transition-colors"
-                    onMouseDown={(e) => {
-                        e.preventDefault();
-                        setIsResizing(true);
-                    }}
-                />
-
                 {/* 1. Header */}
                 <div className={clsx(
                     "p-4 border-b flex justify-between items-center transition-colors duration-500 min-w-0",
                     isHuman ? "bg-red-500/10 border-red-500/30" : (isDark ? "border-gray-800" : "border-slate-200/40")
                 )}>
-                    <div className="flex items-center gap-2">
-                        <div className={clsx("w-3 h-3 rounded-full animate-pulse", isHuman ? "bg-red-500" : "bg-atc-blue")} />
-                        <span className={clsx("font-mono font-bold tracking-widest text-sm", isHuman ? "text-red-500" : (isDark ? "text-atc-blue" : "text-blue-600"))}>
-                            {isHuman ? "ADMIN CONTROL" : "SYSTEM ONLINE"}
-                        </span>
+                    <div className="flex items-center gap-3">
+                        <div className={clsx("p-2 rounded-lg min-w-0", isHuman ? "bg-red-500 text-white animate-pulse" : (isDark ? "bg-gray-800 text-blue-400" : "bg-white text-blue-600 shadow-sm"))}>
+                           {isHuman ? <ShieldAlert size={20} /> : <Activity size={20} />}
+                        </div>
+                        <div className="min-w-0">
+                            <h2 className="font-bold text-sm tracking-wide min-w-0">
+                                <Tooltip content="Main Control Panel" position="bottom">
+                                    TRAFFIC CONTROL
+                                </Tooltip>
+                            </h2>
+                            <div className="flex items-center gap-2 text-[10px] opacity-60 font-mono min-w-0">
+                                <span className={clsx("w-1.5 h-1.5 rounded-full", isHuman ? "bg-red-500" : "bg-emerald-500")}></span>
+                                {isHuman ? "MANUAL OVERRIDE" : "AUTONOMOUS"}
+                            </div>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        {/* Radar Detach (Maximize) */}
-                        {viewMode === 'standard' && (
-                             <CustomTooltip text="Detach Radar" position="bottom">
-                                <button 
-                                    onClick={() => setViewMode('detached')} 
-                                    className={clsx("p-2 rounded-full transition-colors relative z-[60]", 
-                                        isDark ? "hover:bg-gray-500/20 text-gray-400" : "hover:bg-slate-200 text-slate-400"
-                                    )}
-                                >
-                                    <Maximize2 className="w-4 h-4" />
-                                </button>
-                            </CustomTooltip>
-                        )}
-
-                        {/* Radar Toggle (Only visible if standard mode) */}
-                         {viewMode === 'standard' && (
-                            <CustomTooltip text="Toggle Radar" position="bottom">
-                                <button 
-                                    onClick={() => setShowRadar(!showRadar)} 
-                                    className={clsx("p-2 rounded-full transition-colors relative z-[60]", 
-                                        showRadar 
-                                            ? (isDark ? "bg-atc-blue/20 text-atc-blue" : "bg-blue-100 text-blue-600")
-                                            : (isDark ? "hover:bg-gray-500/20 text-gray-500" : "hover:bg-slate-200 text-slate-400")
-                                    )}
-                                >
-                                    <RadarIcon className="w-4 h-4" />
-                                </button>
-                            </CustomTooltip>
-                        )}
-                        
-                        <div className={clsx("w-px h-4 mx-1", isDark ? "bg-gray-500/20" : "bg-slate-300")} />
-
-                        <CustomTooltip text="Settings" position="bottom">
-                            <button onClick={() => setIsSettingsOpen(true)} className={clsx("p-2 rounded-full transition-colors relative z-[60]", isDark ? "hover:bg-gray-500/20" : "hover:bg-slate-200 text-slate-500")}>
-                                <Settings className="w-4 h-4" />
+                    <div className="flex items-center gap-1 min-w-0">
+                        <Tooltip content="Toggle Theme" position="bottom">
+                            <button 
+                                onClick={() => setIsDark(!isDark)}
+                                className={clsx("p-2 rounded-md transition-all min-w-0", isDark ? "hover:bg-gray-800 text-gray-400" : "hover:bg-slate-200 text-slate-500")}
+                            >
+                                {isDark ? "🌙" : "☀️"}
                             </button>
-                        </CustomTooltip>
-                        <CustomTooltip text="Theme" position="bottom">
-                            <button onClick={() => setIsDark(!isDark)} className={clsx("p-2 rounded-full transition-colors relative z-[60]", isDark ? "hover:bg-gray-500/20" : "hover:bg-slate-200 text-slate-500")}>
-                                {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                        </Tooltip>
+                        <Tooltip content="System Settings" position="bottom-left">
+                            <button 
+                                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                                className={clsx("p-2 rounded-md transition-all min-w-0", isSettingsOpen ? "bg-blue-500/20 text-blue-500" : (isDark ? "hover:bg-gray-800 text-gray-400" : "hover:bg-slate-200 text-slate-500"))}
+                            >
+                                <Settings size={16} />
                             </button>
-                        </CustomTooltip>
+                        </Tooltip>
                     </div>
                 </div>
 
                 {/* Control Panel (Audio + Emergency) */}
                 <div className={clsx(
-                    "p-2.5 border-b z-20 relative shrink-0 grid grid-cols-[auto_1fr] gap-2.5 h-20 items-center min-w-0",
+                    "p-2.5 border-b z-20 relative shrink-0 grid grid-cols-[auto_1fr] gap-1 h-20 items-center min-w-0",
                     isDark ? "border-gray-800 bg-gray-900/50" : "border-slate-200 bg-slate-50/50"
                 )}>
-                    
-                    {/* Left Col: Audio Controls (28px + 4px + 28px = Total 60px) */}
-                    <div className="flex flex-col gap-1">
-                         <CustomTooltip text="System/Admin Sounds" position="right">
+                    {/* Left Col: Audio Controls (Unified) */}
+                    <div className="flex flex-col gap-1 min-w-0">
+                        {/* Master Mute (System + Network) */}
+                        <Tooltip content={isAdminMuted ? "Unmute All" : "Mute All"}>
                             <button 
-                                onClick={() => setIsAdminMuted(!isAdminMuted)} 
+                                onClick={() => {
+                                    const newState = !isAdminMuted;
+                                    setIsAdminMuted(newState);
+                                    setIsAgentMuted(newState);
+                                }}
                                 className={clsx(
-                                    "flex items-center justify-center gap-1 px-2 w-14 h-[28px] rounded text-[9px] font-bold transition-colors border", 
+                                    "h-[60px] w-14 rounded flex flex-col items-center justify-center gap-1 transition-none border min-w-0",
                                     isAdminMuted 
-                                        ? "bg-red-500/10 text-red-500 border-red-500/30" 
-                                        : (isDark ? "bg-gray-800 border-gray-700 text-gray-400" : "bg-white border-slate-300 text-slate-500")
+                                        ? (isDark ? "bg-red-900/20 border-red-800/50 text-red-400" : "bg-red-50 border-red-200 text-red-500")
+                                        : (isDark ? "bg-gray-800 border-gray-700 hover:bg-gray-700 text-gray-300" : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600")
                                 )}
                             >
-                                {isAdminMuted ? <MicOff className="w-2.5 h-2.5" /> : <Mic className="w-2.5 h-2.5" />}
-                                <span>SYS</span>
+                                {isAdminMuted ? <VolumeX size={16} /> : <Speaker size={16} />}
+                                <span className="text-[9px] font-bold">AUDIO</span>
                             </button>
-                         </CustomTooltip>
-                         
-                         <CustomTooltip text="Agent Comms Sounds" position="right">
-                            <button 
-                                onClick={() => setIsAgentMuted(!isAgentMuted)}
-                                className={clsx(
-                                    "flex items-center justify-center gap-1 px-2 w-14 h-[28px] rounded text-[9px] font-bold transition-colors border", 
-                                    isAgentMuted 
-                                        ? "bg-amber-500/10 text-amber-500 border-amber-500/30" 
-                                        : (isDark ? "bg-gray-800 border-gray-700 text-gray-400" : "bg-white border-slate-300 text-slate-500")
-                                )}
-                            >
-                                {isAgentMuted ? <VolumeX className="w-2.5 h-2.5" /> : <Radio className="w-2.5 h-2.5" />}
-                                <span>NET</span>
-                            </button>
-                         </CustomTooltip>
+                        </Tooltip>
                     </div>
 
                     {/* Right Col: Emergency - Height matched to 60px */}
                     <div className="flex items-center h-full min-w-0">
-                        <CustomTooltip text={isHuman ? "Yield to system" : "Force system override"} fullWidth>
-                            <button
-                                onClick={isHuman ? releaseLock : handleOverride}
-                                disabled={!isHuman && (state.overrideSignal || isOverrideLoading)}
-                                className={clsx(
-                                    "w-full h-[60px] flex flex-col items-center justify-center font-bold transition-all border text-[9px] shadow-sm rounded-md uppercase leading-none",
-                                    isHuman 
-                                        ? "bg-green-500/10 text-green-500 border-green-500/30 hover:bg-green-500/20" 
-                                        : (isDark ? "bg-blue-900/20 text-blue-400 border-blue-800 hover:bg-blue-900/40" : "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100")
-                                )}
-                            >
-                                {isHuman ? <Shield className="w-4 h-4 mb-1" /> : <Fingerprint className="w-4 h-4 mb-1" />}
-                                <div className="flex flex-col items-center gap-0.5">
-                                    <span>{isHuman ? "Release" : "Emergency"}</span>
-                                    <span>{isHuman ? "Lock" : "Takeover"}</span>
-                                </div>
-                            </button>
-                        </CustomTooltip>
+                         {isHuman ? (
+                             <button
+                                 onClick={releaseLock}
+                                 className="h-[60px] w-full rounded bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-[10px] tracking-wider shadow-lg shadow-emerald-900/20 flex flex-col items-center justify-center gap-1 transition-all min-w-0"
+                             >
+                                 <Unlock size={16} />
+                                 <span>RELEASE LOCK</span>
+                             </button>
+                         ) : (
+                             <Tooltip content="Force Manual Control" position="top" className="w-full h-full">
+                                <button
+                                    onClick={handleOverride}
+                                    disabled={isOverrideLoading}
+                                    className={clsx(
+                                        "h-[60px] w-full rounded font-bold text-[10px] tracking-wider shadow-lg flex flex-col items-center justify-center gap-1 transition-all min-w-0",
+                                        isOverrideLoading 
+                                            ? "bg-gray-600 cursor-wait opacity-50"
+                                            : "bg-red-500 hover:bg-red-600 text-white shadow-red-900/20 hover:scale-[1.02] active:scale-[0.98]"
+                                    )}
+                                >
+                                    {isOverrideLoading ? (
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    ) : (
+                                        <>
+                                            <Lock size={16} />
+                                            <span>EMERGENCY TAKEOVER</span>
+                                        </>
+                                    )}
+                                </button>
+                             </Tooltip>
+                         )}
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto overflow-x-hidden w-full custom-scrollbar p-6 space-y-6">
+                {/* 2. Scrollable Content */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-6 min-w-0">
                     
-                    {/* 2. Radar (Conditional) */}
-                    {viewMode === 'detached' ? (
-                        // Placeholder when detached to prevent layout shift or empty space
-                         <div className={clsx("w-full p-4 rounded-xl border flex items-center justify-between", isDark ? "border-gray-800 bg-gray-900/50" : "border-slate-200 bg-slate-50/50")}>
-                             <div className="flex items-center gap-3">
-                                <RadarIcon className="w-5 h-5 opacity-40" />
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-bold opacity-70">RADAR ACTIVE</span>
-                                    <span className="text-[10px] opacity-40">Main Screen</span>
-                                </div>
-                             </div>
-                             <button 
-                                onClick={() => setViewMode('standard')}
-                                className={clsx("px-3 py-1.5 text-xs font-bold rounded-lg border transition-all", 
-                                    isDark ? "bg-gray-800 border-gray-700 hover:bg-gray-700" : "bg-white border-slate-300 hover:bg-slate-100"
-                                )}
-                             >
-                                 RESTORE
-                             </button>
-                        </div>
-                    ) : (
-                        showRadar && (
-                            <div className="w-full aspect-square flex justify-center items-center scale-90 -my-4">
-                                <Radar 
-                                    state={state} 
-                                    agents={agents} 
-                                    isDark={isDark} 
-                                    onAgentClick={setSelectedAgentId}
-                                    selectedAgentId={selectedAgentId}
-                                    compact={true}
-                                />
-                            </div>
-                        )
-                    )}
-
-                    {/* 3. Metrics Grid */}
-                    <div className="grid grid-cols-2 gap-2 w-full">
-                        <CustomTooltip text="Average response time" fullWidth>
-                            <MetricBox label="LATENCY" value={`${state.latency}ms`} isDark={isDark} showChart />
-                        </CustomTooltip>
-                        <CustomTooltip text="Total conflicts" fullWidth>
-                            <MetricBox label="COLLISIONS" value={state.collisionCount} isDark={isDark} color="text-red-500" showChart />
-                        </CustomTooltip>
-                        <CustomTooltip text="Simulation duration" fullWidth>
-                            <MetricBox label="UPTIME" value={formatTime(uptime)} isDark={isDark} />
-                        </CustomTooltip>
-                        <CustomTooltip text="Success rate" fullWidth align="right">
-                            <MetricBox label="SUCCESS" value={`${successRate}%`} isDark={isDark} color="text-green-500" />
-                        </CustomTooltip>
-                    </div>
-
-                    {/* Controller Status Display */}
-                    <div className={clsx("w-full p-2 rounded-lg border flex justify-between items-center", isDark ? "bg-gray-800/50 border-gray-700" : "bg-white border-slate-200")}>
-                        <CustomTooltip text="Current access authority status" align="left">
-                            <span className="text-[10px] uppercase font-bold opacity-60 cursor-help">CONTROLLER</span>
-                        </CustomTooltip>
-                        <CustomTooltip text={state.holder || "System Idle"} align="right">
-                            <span className={clsx("font-mono font-bold truncate max-w-[200px]", isHuman ? "text-red-500" : "text-atc-purple")}>
-                                {state.holder || "IDLE"}
+                    {/* System Congestion (Moved inside scroll) */}
+                    <div className="space-y-3 min-w-0">
+                        <div className="flex justify-between items-end min-w-0">
+                            <label className={clsx("text-xs font-bold uppercase tracking-wider flex items-center gap-2 min-w-0", isDark ? "text-gray-400" : "text-slate-500")}>
+                                <Cpu size={14} />
+                                <Tooltip content="Current System Load" position="bottom">
+                                    System Congestion
+                                </Tooltip>
+                            </label>
+                            <span className={clsx("text-xs font-mono min-w-0", isDark ? "text-blue-400" : "text-blue-600")}>
+                                {state.activeAgentCount} / 10
                             </span>
-                        </CustomTooltip>
+                        </div>
+                        <div className="relative pt-1 min-w-0">
+                            <input 
+                                type="range" 
+                                min="0" 
+                                max="10" 
+                                step="1"
+                                value={sliderValue}
+                                onChange={handleSliderChange}
+                                className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                            />
+                             {/* Scale Numbers */}
+                            <div className={clsx("flex justify-between text-[9px] font-mono mt-1 select-none min-w-0", isDark ? "text-gray-600" : "text-slate-400")}>
+                                <span>0</span>
+                                <span>5</span>
+                                <span>10</span>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* System Congestion (Moved here) */}
-                    <div className={clsx("p-3 rounded-lg border", isDark ? "bg-gray-800/30 border-gray-700" : "bg-white border-slate-200")}>
-                        <div className="flex justify-between items-center mb-2">
-                            <CustomTooltip text="Adjust traffic volume" align="left">
-                                <span className="text-[10px] font-bold opacity-70 cursor-help">SYSTEM CONGESTION</span>
-                            </CustomTooltip>
-                            <span className="text-[10px] font-mono text-atc-purple bg-atc-purple/10 px-1.5 py-0.5 rounded">LOAD: {sliderValue}</span>
+                    {/* Mini Radar Preview */}
+                    <div className="space-y-3 min-w-0">
+                         <div className="flex justify-between items-center min-w-0">
+                            <label className={clsx("text-xs font-bold uppercase tracking-wider flex items-center gap-2 min-w-0", isDark ? "text-gray-400" : "text-slate-500")}>
+                                <Radio size={14} />
+                                <Tooltip content="Live Sector Preview" position="bottom">
+                                    Sector Scan
+                                </Tooltip>
+                            </label>
+                             <Tooltip content={viewMode === 'attached' ? "Detach View" : "Attach View"} position="left">
+                                <button 
+                                    onClick={() => {
+                                        if (viewMode === 'attached') setViewMode('detached');
+                                        else setViewMode('attached');
+                                    }}
+                                    className={clsx("text-[10px] px-2 py-0.5 rounded border transition-colors min-w-0", 
+                                        viewMode === 'detached' 
+                                            ? (isDark ? "bg-blue-900/30 border-blue-800 text-blue-300" : "bg-blue-50 border-blue-200 text-blue-600")
+                                            : (isDark ? "bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700" : "bg-white border-slate-200 text-slate-500")
+                                    )}
+                                >
+                                    {viewMode === 'attached' ? 'DETACH VIEW' : 'ATTACH VIEW'}
+                                </button>
+                             </Tooltip>
                         </div>
-                        <input type="range" min="0" max="10" value={sliderValue} onChange={(e) => handleScale(parseInt(e.target.value))} className="w-full accent-atc-purple cursor-pointer h-1" />
-                        <div className="flex justify-between text-[9px] font-mono opacity-40 mt-1.5 px-0.5">
-                            <span>0</span>
-                            <span>5</span>
-                            <span>10</span>
-                        </div>
+
+                        {showRadar && (
+                            <div className={clsx("h-48 rounded-lg overflow-hidden border relative min-w-0", isDark ? "border-gray-800 bg-black" : "border-slate-200 bg-slate-100")}>
+                                <Radar compact={true} />
+                                {viewMode === 'detached' && (
+                                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center">
+                                        <span className="text-xs font-mono text-white/70">RADAR DETACHED</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
-                    {/* 6. Agent List (Sortable) */}
-                    <div>
-                        <div className="flex items-center justify-between mb-3 cursor-pointer select-none" onClick={() => setIsAgentListOpen(!isAgentListOpen)}>
-                            <h3 className="text-xs font-bold opacity-50 flex items-center gap-2">
-                                <Activity className="w-3 h-3" /> ACTIVE AGENTS ({agents.length})
-                            </h3>
-                            <div className="flex items-center gap-3">
-                                <CustomTooltip text="Stop All" position="left">
+                    {/* Agent List */}
+                    <div className="space-y-3 min-w-0">
+                         <div 
+                            className="flex justify-between items-center cursor-pointer group min-w-0"
+                            onClick={() => setIsAgentListOpen(!isAgentListOpen)}
+                        >
+                            <label className={clsx("text-xs font-bold uppercase tracking-wider flex items-center gap-2 min-w-0", isDark ? "text-gray-400" : "text-slate-500")}>
+                                <Activity size={14} />
+                                <Tooltip content="Connected Agents List" position="bottom">
+                                    Active Links ({agents.length})
+                                </Tooltip>
+                            </label>
+                            <div className="flex items-center gap-2">
+                                {/* Global Pause Button */}
+                                <Tooltip content={state.globalStop ? "Resume All Agents" : "Pause All Agents"} position="left">
                                     <button 
-                                        onClick={(e) => { e.stopPropagation(); toggleGlobalStop(); }} 
-                                        disabled={isHuman}
-                                        className={clsx(
-                                            "p-1.5 rounded transition-all", 
-                                            globalStop ? "bg-red-500 text-white" : (isDark ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-slate-200 text-slate-600 hover:bg-slate-300"),
-                                            isHuman && "opacity-50 cursor-not-allowed"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            console.log('[SIDEBAR] Global Toggle Clicked');
+                                            toggleGlobalStop();
+                                        }}
+                                        className={clsx("p-1 rounded shadow-sm flex items-center justify-center transition-none z-30", 
+                                            state.globalStop 
+                                                ? "bg-red-500 text-white animate-pulse border border-red-400" 
+                                                : (isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 border border-gray-700" : "bg-white hover:bg-slate-100 text-slate-500 border border-slate-300 shadow-sm")
                                         )}
                                     >
-                                        {globalStop ? <Play className="w-3 h-3 fill-current" /> : <Square className="w-3 h-3 fill-current" />}
+                                        {state.globalStop ? <Play size={12} fill="currentColor" /> : <Pause size={12} fill="currentColor" />}
                                     </button>
-                                </CustomTooltip>
-                                {isAgentListOpen ? <ChevronUp className="w-3 h-3 opacity-50" /> : <ChevronDown className="w-3 h-3 opacity-50" />}
+                                </Tooltip>
+                                <ChevronDown size={14} className={clsx("transition-transform min-w-0", !isAgentListOpen ? "rotate-180" : "", isDark ? "text-gray-600" : "text-slate-400")} />
                             </div>
                         </div>
 
-                        <AnimatePresence>
-                            {isAgentListOpen && (
-                                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                                    <DndContext 
-                                        sensors={sensors}
-                                        collisionDetection={closestCenter}
-                                        onDragEnd={handleDragEnd}
+                        {isAgentListOpen && (
+                            <div className="space-y-2 min-w-0">
+                                {agents.map(agent => (
+                                    <div 
+                                        key={agent.id}
+                                        onClick={() => setSelectedAgentId(agent.id === selectedAgentId ? null : agent.id)}
+                                        className={clsx(
+                                            "p-3 rounded border cursor-pointer transition-all relative overflow-hidden group min-w-0",
+                                            state.holder === agent.id 
+                                                ? "bg-emerald-500/10 border-emerald-500/50" 
+                                                : (agent.status === 'paused' 
+                                                    ? "bg-red-900/80 border-red-500 text-white" // Removed grayscale, increased opacity, explicit text color
+                                                    : (agent.id === selectedAgentId 
+                                                        ? (isDark ? "bg-blue-900/20 border-blue-500/50" : "bg-blue-50 border-blue-300")
+                                                        : (isDark ? "bg-gray-800/50 border-gray-800 hover:bg-gray-800" : "bg-white border-slate-200 hover:border-slate-300")))
+                                        )}
                                     >
-                                        <SortableContext 
-                                            items={agents.map(a => a.id)}
-                                            strategy={verticalListSortingStrategy}
-                                        >
-                                            <div className="space-y-2">
-                                                {agents.length > 0 && agents.map(agent => (
-                                                    <SortableAgentRow 
-                                                        key={agent.id} 
-                                                        agent={agent} 
-                                                        isDark={isDark} 
-                                                        togglePause={togglePause}
-                                                        isHuman={isHuman} 
-                                                        isHolder={state.holder === agent.id}
-                                                        isSelected={selectedAgentId === agent.id}
-                                                        onClick={() => setSelectedAgentId(agent.id)}
-                                                    />
-                                                ))}
+                                        <div className="flex justify-between items-start mb-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className={clsx("font-mono text-xs font-bold min-w-0 flex items-center gap-1", isDark ? "text-gray-300" : "text-slate-700")}>
+                                                    {agent.id}
+                                                    {agent.status === 'paused' && <Pause size={8} className="text-red-500 fill-current" />}
+                                                </span>
+                                                {/* In-List Controls */}
+                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            togglePause(agent.id, agent.status === 'paused');
+                                                        }}
+                                                        className={clsx("p-0.5 rounded", isDark ? "hover:bg-white/10" : "hover:bg-black/5")}
+                                                    >
+                                                        {agent.status === 'paused' ? <Play size={10} /> : <Pause size={10} />}
+                                                    </button>
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            terminateAgent(agent.id);
+                                                        }}
+                                                        className={clsx("p-0.5 rounded", isDark ? "hover:bg-white/10 hover:text-red-400" : "hover:bg-black/5 hover:text-red-600")}
+                                                        title="Terminate"
+                                                    >
+                                                        <Square size={10} />
+                                                    </button>
+                                                </div>
                                             </div>
-                                        </SortableContext>
-                                    </DndContext>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+
+                                            {state.holder === agent.id && (
+                                                <span className="text-[10px] font-bold text-emerald-500 animate-pulse min-w-0">LOCKED</span>
+                                            )}
+                                        </div>
+                                        <div className="flex justify-between items-center min-w-0">
+                                            <span className={clsx("text-[10px] min-w-0", isDark ? "text-gray-500" : "text-slate-500")}>
+                                                {agent.activity || "Idle"}
+                                            </span>
+                                            <span className={clsx("text-[9px] px-1.5 py-0.5 rounded min-w-0", isDark ? "bg-gray-700 text-gray-400" : "bg-slate-100 text-slate-500")}>
+                                                {agent.model}
+                                            </span>
+                                        </div>
+                                        
+                                        {/* Detail View Expansion */}
+                                        {agent.id === selectedAgentId && (
+                                            <div className="mt-2 pt-2 border-t border-dashed border-gray-700/50 text-[10px] font-mono space-y-1">
+                                                <div className="flex justify-between">
+                                                    <span className="opacity-50">PRIORITY</span>
+                                                    <span>{agent.priority || 'NORMAL'}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="opacity-50">LAST ACTIVE</span>
+                                                    <span>{agent.lastActive ? new Date(agent.lastActive).toLocaleTimeString() : '-'}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="opacity-50">RESOURCE</span>
+                                                    <span className="truncate max-w-[100px]">{agent.resource || 'N/A'}</span>
+                                                </div>
+                                                <div className="flex gap-2 mt-2">
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            terminateAgent(agent.id);
+                                                        }}
+                                                        className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-1 rounded text-center"
+                                                    >
+                                                        TERMINATE
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Progress Bar (Simulated) */}
+                                        {state.holder === agent.id && (
+                                            <div className="absolute bottom-0 left-0 h-0.5 bg-emerald-500 animate-progress w-full" />
+                                        )}
+                                    </div>
+                                ))}
+                                {agents.length === 0 && (
+                                    <div className={clsx("text-center py-8 text-xs italic min-w-0", isDark ? "text-gray-700" : "text-slate-400")}>
+                                        No Active Agents
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                 {/* Footer: Opacity */}
-                <div className={clsx("p-4 border-t flex flex-col gap-3", isDark ? "border-gray-800 bg-gray-900" : "border-slate-200 bg-slate-50")}>
-                    {/* Opacity Slider */}
-                    <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold opacity-50 w-12">OPACITY</span>
-                        <input type="range" min="50" max="100" value={opacity} onChange={(e) => setOpacity(e.target.value)} className="flex-1 accent-gray-500 h-1" />
+                {/* 3. Footer (Status Bar) */}
+                <div className={clsx(
+                    "p-3 border-t text-[10px] font-mono flex justify-between items-center min-w-0",
+                    isDark ? "border-gray-800 bg-[#0d1117] text-gray-600" : "border-slate-200 bg-white text-slate-400"
+                )}>
+                    <div className="flex items-center gap-2 min-w-0">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            ONLINE
+                        </span>
+                        <span>v2.4.0-RC</span>
                     </div>
+                    <span className="min-w-0">UPTIME: {formatUptime(uptime)}</span>
                 </div>
             </aside>
 
-    {/* Floating Tactical Panel (Independent Draggable) - Always Rendered */}
-        <AgentTacticalPanel 
-            agents={agents}
-            activeAgentCount={state.activeAgentCount}
-            globalStop={globalStop}
-            toggleGlobalStop={toggleGlobalStop}
-            isDark={isDark}
-            isHuman={isHuman}
-            onTogglePause={togglePause}
-            startRenaming={startRenaming}
-            submitRename={submitRename}
-            terminateAgent={terminateAgent}
-            renamingId={renamingId}
-            setRenamingId={setRenamingId}
-            newName={newName}
-            setNewName={setNewName}
-            sidebarWidth={width}
-        />
-
-        {isSettingsOpen && (
-            <AgentSettings 
-                agents={agents} 
-                onClose={() => setIsSettingsOpen(false)} 
-                isDark={isDark} 
-            />
-        )}
-    </>
+        {/* Floating Tactical Panel (Independent Draggable) - Always Rendered */}
+        <AgentTacticalPanel />
+        {isSettingsOpen && agents && <AgentSettings onClose={() => setIsSettingsOpen(false)} />}
+      </>
   );
 };
+
+// Helper for isHuman
+// Removed placeholder
+
