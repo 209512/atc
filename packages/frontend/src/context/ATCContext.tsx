@@ -47,6 +47,8 @@ interface ATCContextType {
     setSelectedAgentId: React.Dispatch<React.SetStateAction<string | null>>;
     isDark: boolean;
     setIsDark: React.Dispatch<React.SetStateAction<boolean>>;
+    areTooltipsEnabled: boolean;
+    setAreTooltipsEnabled: React.Dispatch<React.SetStateAction<boolean>>;
     
     // Audio State
     isAdminMuted: boolean;
@@ -102,6 +104,7 @@ export const ATCProvider = ({ children }: { children: ReactNode }) => {
   const [viewMode, setViewMode] = useState('attached'); 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(true);
+  const [areTooltipsEnabled, setAreTooltipsEnabled] = useState(true);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -311,6 +314,94 @@ export const ATCProvider = ({ children }: { children: ReactNode }) => {
   
   const toggleGlobalStop = useCallback(async () => {
       const newState = !state.globalStop;
+      
+      // If we are RESUMING (newState === false), we need to ensure agents that were manually paused 
+      // remain paused in our local optimistic state.
+      // Currently, the server logic for global stop might be overriding individual pause states?
+      // Let's check: The server uses `this.state.globalStop`. 
+      // Agents check `atcService.state.globalStop`.
+      // If globalStop is true, everyone stops.
+      // If globalStop is false, agents check their own pause state.
+      
+      // The issue is likely that `pausedAgentsRef` is not being respected when global stop is lifted?
+      // Or simply that the UI needs to know if an agent is paused via Global vs Individual.
+      
+      // Actually, if we use `togglePause` individually, we update `pausedAgentsRef`.
+      // When we toggle Global Stop, `state.globalStop` changes.
+      
+      // The `mergedAgents` logic in pollInterval:
+      /*
+        const mergedAgents = data.map((agent: Agent) => {
+            if (pausedAgentsRef.current.has(agent.id)) {
+                return { ...agent, status: 'paused' };
+            }
+            return agent;
+        });
+      */
+      // This looks correct for individual pause.
+      
+      // But if Global Stop is ON, the server might report 'paused' for everyone?
+      // If server reports 'paused' for everyone, `mergedAgents` will show 'paused'.
+      // When Global Stop turns OFF, server reports 'idle'/'active'.
+      // `pausedAgentsRef` should still have the manually paused ID.
+      // So `mergedAgents` should still return 'paused' for that one.
+      
+      // Wait, if the user manually pauses Agent A. `pausedAgentsRef` has A.
+      // User toggles Global Stop ON. Server stops everyone.
+      // User toggles Global Stop OFF. Server resumes everyone.
+      // `pausedAgentsRef` still has A.
+      // So Agent A should remain paused.
+      
+      // I need to verify why the user says "individual pause is released".
+      // Maybe the server clears individual pause commands when global stop is toggled?
+      // Let's look at `atc.service.js`.
+      // It just sets `this.state.globalStop`.
+      // It does NOT clear `MAP_AGENT_COMMANDS`.
+      
+      // However, maybe the frontend `togglePause` logic has a flaw?
+      // Or maybe the user *wants* to ensure that if they paused A, then Global Pause, then Global Resume, A stays paused.
+      // My logic *should* support that.
+      
+      // Let's re-read the user complaint:
+      // "개별 일시정지 후 전체 일시정지 버튼 눌렀다 해제하면 개별일시정지 버튼 눌렀던 것은 일시정지가 해제 안되는 것 고쳐."
+      // "Fix: Individual pause NOT being released when Global Pause is toggled off."
+      // Wait. "일시정지가 해제 안되는 것 고쳐" -> "Fix the fact that it DOES NOT release".
+      // Meaning: They WANT it to release? Or they WANT it to NOT release?
+      // "개별 일시정지 후 (Individual Pause ON) -> 전체 일시정지 ON -> 전체 일시정지 OFF -> 개별 일시정지 버튼 눌렀던 것은 일시정지가 해제 안되는 것 고쳐."
+      // This phrasing is ambiguous.
+      // Interpretation A: "It stays paused (as it should), but I want it to UNPAUSE." (Global Resume = Reset All)
+      // Interpretation B: "It UNPAUSES (which is wrong), I want it to STAY PAUSED." (Individual preference preserved)
+      // "해제 안되는 것 고쳐" literally means "Fix the thing where it is NOT released".
+      // So currently it is NOT released (it stays paused). User wants to fix this.
+      // So User wants: Global Resume -> SHOULD RELEASE EVERYTHING including manually paused ones?
+      
+      // Context: "Fix individual pause button state not reverting when global pause is toggled off"
+      // Usually "Fix X not Y" means "Make X do Y".
+      // So "Fix individual pause ... not releasing" -> "Make individual pause release".
+      
+      // IF the user wants Global Resume to UNPAUSE EVERYTHING:
+      // Then I should clear `pausedAgentsRef` when `toggleGlobalStop(false)` is called.
+      
+      if (!newState) { // Resuming globally
+           pausedAgentsRef.current.clear(); // Clear all manual pauses
+           // We also need to tell server to clear all pause commands?
+           // The server `pauseAgent` writes to `MAP_AGENT_COMMANDS`.
+           // `toggleGlobalStop` only flips a boolean.
+           // If we want to clear individual pauses, we need to send unpause requests for all of them?
+           // Or add an API to clear all commands.
+           
+           // For now, let's clear the local ref so UI updates immediately.
+           // And maybe iterate and unpause them?
+           // Or is there a "Reset All" API? No.
+           // I will clear local ref and iterate `pausedAgentsRef` before clearing to send requests.
+           
+           const agentsToResume = Array.from(pausedAgentsRef.current);
+           agentsToResume.forEach(id => {
+               togglePause(id, true); // true = currently paused, so unpause
+           });
+           pausedAgentsRef.current.clear();
+      }
+
       try {
           await fetch('http://localhost:3000/api/stop', {
               method: 'POST',
@@ -318,7 +409,7 @@ export const ATCProvider = ({ children }: { children: ReactNode }) => {
               body: JSON.stringify({ enable: newState })
           });
       } catch (e) { console.error(e); }
-  }, [state.globalStop]);
+  }, [state.globalStop, togglePause]);
 
   const value: ATCContextType = {
     state,
@@ -338,6 +429,7 @@ export const ATCProvider = ({ children }: { children: ReactNode }) => {
     viewMode, setViewMode,
     selectedAgentId, setSelectedAgentId,
     isDark, setIsDark,
+    areTooltipsEnabled, setAreTooltipsEnabled,
     // Audio State
     isAdminMuted, setIsAdminMuted,
     isAgentMuted, setIsAgentMuted,

@@ -219,7 +219,7 @@ const LightModeDust = ({ isDark }) => {
 
 export const Radar = ({ compact = false, isMainView = false }) => {
     const { state, agents, isDark, setSelectedAgentId, selectedAgentId, terminateAgent } = useATC();
-    const { holder, overrideSignal } = state;
+    const { holder, overrideSignal, globalStop } = state;
     
     // Calculate Agent Positions based on ID hash or index
     const agentPositions = useMemo(() => {
@@ -277,7 +277,7 @@ export const Radar = ({ compact = false, isMainView = false }) => {
                         isDark={isDark}
                         onClick={setSelectedAgentId}
                         isSelected={selectedAgentId === agent.id}
-                        isPaused={agent.status === 'paused'}
+                        isPaused={agent.status === 'paused' || globalStop}
                     />
                 ))}
 

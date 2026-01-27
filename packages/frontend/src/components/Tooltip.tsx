@@ -18,10 +18,11 @@ export const Tooltip: React.FC<TooltipProps> = ({
     className
 }) => {
     const [isVisible, setIsVisible] = useState(false);
-    const { isDark } = useATC();
+    const { isDark, areTooltipsEnabled } = useATC();
     const timeoutRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
 
     const show = () => {
+        if (!areTooltipsEnabled) return;
         timeoutRef.current = setTimeout(() => setIsVisible(true), delay);
     };
 

@@ -9,7 +9,7 @@ interface AgentSettingsProps {
 }
 
 export const AgentSettings: React.FC<AgentSettingsProps> = ({ onClose }) => {
-    const { agents = [], isDark } = useATC(); // Default to empty array safely
+    const { agents = [], isDark, areTooltipsEnabled, setAreTooltipsEnabled } = useATC(); // Default to empty array safely
     const [selectedAgent, setSelectedAgent] = useState<string>(agents[0]?.id || '');
     const [provider, setProvider] = useState('mock');
     const [apiKey, setApiKey] = useState('');
@@ -79,6 +79,25 @@ export const AgentSettings: React.FC<AgentSettingsProps> = ({ onClose }) => {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
+                    {/* Interface Settings */}
+                    <div className="p-3 rounded-lg border border-dashed border-gray-500/30 bg-gray-500/5">
+                        <label className="flex items-center justify-between cursor-pointer">
+                            <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                                <MessageSquare size={14} />
+                                Enable Tooltips
+                            </span>
+                            <div className="relative inline-block w-8 h-4 align-middle select-none transition duration-200 ease-in">
+                                <input 
+                                    type="checkbox" 
+                                    checked={areTooltipsEnabled}
+                                    onChange={(e) => setAreTooltipsEnabled(e.target.checked)}
+                                    className="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 right-4"
+                                />
+                                <label className={clsx("toggle-label block overflow-hidden h-4 rounded-full cursor-pointer", areTooltipsEnabled ? "bg-blue-500" : "bg-gray-400")}></label>
+                            </div>
+                        </label>
+                    </div>
+
                     {/* Agent Selector */}
                     <div className="space-y-1">
                         <label className="block text-xs font-bold uppercase opacity-50 tracking-wider">Target Agent</label>
