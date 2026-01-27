@@ -59,22 +59,53 @@ class ATCService extends EventEmitter {
     this.scalingInProgress = true;
     
     try {
-        console.log(`⚖️ Scaling Agent Pool to ${targetCount}...`);  
-        for (let i = 1; i <= targetCount; i++) {  
-          const agentId = `Agent-${i}`;  
-          if (!this.agents.has(agentId)) {  
-            const config = this.agentConfigs.get(agentId) || { provider: 'mock', model: 'simulation-v1' };
-            const agent = new Agent(agentId, this, config);  
-            this.agents.set(agentId, agent);  
-            agent.start();  
-          }  
-        }  
-        const currentIds = Array.from(this.agents.keys());  
-        for (const id of currentIds) {  
-          const agentNum = parseInt(id.split('-')[1]); // Assumes Agent-N naming for auto-scaling
-          if (agentNum > targetCount) {  
-            await this.terminateAgent(id);
-          }  
+        console.log(`⚖️ Scaling System Load to ${targetCount}...`);
+        
+        // 1. Separate Custom vs Auto Agents
+        const allAgents = Array.from(this.agents.values());
+        const customAgents = allAgents.filter(a => !/^Agent-\d+$/.test(a.id));
+        const autoAgents = allAgents.filter(a => /^Agent-\d+$/.test(a.id));
+        
+        // Sort auto agents by N to ensure stability
+        autoAgents.sort((a, b) => {
+            const numA = parseInt(a.id.split('-')[1]);
+            const numB = parseInt(b.id.split('-')[1]);
+            return numA - numB;
+        });
+
+        // 2. Calculate how many Auto Agents we need
+        // Target is Total Load. So Auto = Target - Custom
+        let neededAuto = targetCount - customAgents.length;
+        if (neededAuto < 0) neededAuto = 0; // Never kill custom agents via slider
+
+        console.log(`   - Custom Agents: ${customAgents.length}`);
+        console.log(`   - Auto Agents Current: ${autoAgents.length} / Target: ${neededAuto}`);
+
+        // 3. Scale Down (Remove excess Auto Agents)
+        if (autoAgents.length > neededAuto) {
+            const toRemove = autoAgents.slice(neededAuto); // Remove from end (highest numbers)
+            for (const agent of toRemove) {
+                await this.terminateAgent(agent.id);
+            }
+        }
+
+        // 4. Scale Up (Add new Auto Agents)
+        if (autoAgents.length < neededAuto) {
+            const toAdd = neededAuto - autoAgents.length;
+            let added = 0;
+            let candidateNum = 1;
+            
+            while (added < toAdd) {
+                const candidateId = `Agent-${candidateNum}`;
+                if (!this.agents.has(candidateId)) {
+                    const config = this.agentConfigs.get(candidateId) || { provider: 'mock', model: 'simulation-v1' };
+                    const agent = new Agent(candidateId, this, config);
+                    this.agents.set(candidateId, agent);
+                    agent.start();
+                    added++;
+                }
+                candidateNum++;
+            }
         }
         
         this.state.activeAgentCount = this.agents.size;
