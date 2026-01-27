@@ -9,6 +9,10 @@ The **ATC System** is a distributed AI agent management platform designed to vis
 - **Visual Feedback:** Dynamic color coding for Agent states (Idle, Active, Locked, Human Override) and particle effects for data transmission.
 - **Detachable View:** Radar can be detached to a full-screen "Main View" for immersive monitoring.
 
+| Ultra-Compact Monitoring | Preview |
+| :--- | :--- |
+| **Seamless Layout Adaptation:** The main viewport is engineered to collapse completely to 0px width without breaking layout integrity. This allows administrators to shrink the browser window to focus solely on the **Sidebar Control Panel**—perfect for keeping an eye on system metrics and emergency controls while multitasking on a single screen. <br><br> **Dynamic UI Orchestration:** Floating elements like `TerminalLog` and `AgentTacticalPanel` automatically adjust their positioning based on the real-time `sidebarWidth`. This prevents visual overlap and ensures critical controls remain accessible even in the most compact configurations. | <img src="sidebar_takeover.gif" width="260px" /> |
+
 ### 🎮 Human-in-the-Loop Control
 - **Emergency Takeover:** Instant administrative lock override (`RELEASE LOCK` / `EMERGENCY TAKEOVER`) to prevent collisions or halt rogue agents.
 - **Traffic Intensity Control:** Adjustable system congestion (agent pool size) via a dedicated slider.
