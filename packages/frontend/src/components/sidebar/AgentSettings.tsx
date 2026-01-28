@@ -5,11 +5,11 @@ import { useATC, Agent } from '../../context/ATCContext';
 
 interface AgentSettingsProps {
     onClose: () => void;
-    agents?: Agent[]; // Optional to prevent runtime crash if not provided
+    agents?: Agent[];
 }
 
 export const AgentSettings: React.FC<AgentSettingsProps> = ({ onClose }) => {
-    const { agents = [], isDark, areTooltipsEnabled, setAreTooltipsEnabled } = useATC(); // Default to empty array safely
+    const { agents = [], isDark, areTooltipsEnabled, setAreTooltipsEnabled, lastRename } = useATC();
     const [selectedAgent, setSelectedAgent] = useState<string>(agents[0]?.id || '');
     const [provider, setProvider] = useState('mock');
     const [apiKey, setApiKey] = useState('');

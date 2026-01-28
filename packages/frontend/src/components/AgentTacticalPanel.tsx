@@ -3,7 +3,7 @@ import Draggable from 'react-draggable';
 import clsx from 'clsx';
 import { 
     X, Pause, Play, Trash2, Edit2, Check, ChevronDown, 
-    AlertTriangle, Terminal, Activity
+    AlertTriangle, Terminal, Activity, Star, Zap
 } from 'lucide-react';
 import { useATC } from '../context/ATCContext';
 import { Tooltip } from './Tooltip';
@@ -18,7 +18,10 @@ export const AgentTacticalPanel = () => {
         startRenaming, 
         submitRename, 
         terminateAgent,
-        sidebarWidth
+        sidebarWidth,
+        togglePriority,
+        transferLock,
+        areTooltipsEnabled
     } = useATC();
 
     const isHuman = state.holder && state.holder.includes('Human');
@@ -118,13 +121,36 @@ export const AgentTacticalPanel = () => {
                                         </div>
                                     ) : (
                                         <div className="flex items-center gap-2 font-mono text-xs font-bold text-blue-400">
-                                            {agent.id}
+                                            {agent.priority && <Star size={12} className="text-yellow-400 fill-yellow-400 animate-pulse" />}
+                                            <span className={clsx(agent.priority && "text-yellow-400")}>{agent.id}</span>
                                             {agent.status === 'paused' && <span className="text-[9px] text-yellow-500 bg-yellow-500/10 px-1 rounded">PAUSED</span>}
                                         </div>
                                     )}
 
                                     {/* Actions */}
                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        {/* Transfer Lock Button */}
+                                        {state.holder && state.holder !== agent.id && !agent.status.includes('paused') && (
+                                            <Tooltip content="Seize Control (Force Lock)">
+                                                <button 
+                                                    onClick={() => transferLock(agent.id)}
+                                                    className="p-1 rounded hover:bg-purple-500/20 text-purple-500 transition" 
+                                                >
+                                                    <Zap size={12} />
+                                                </button>
+                                            </Tooltip>
+                                        )}
+                                        
+                                        {/* Priority Toggle */}
+                                        <Tooltip content={agent.priority ? "Revoke Priority" : "Grant Priority"}>
+                                            <button 
+                                                onClick={() => togglePriority(agent.id, !agent.priority)}
+                                                className={clsx("p-1 rounded transition", agent.priority ? "text-yellow-400 hover:bg-yellow-400/20" : "text-gray-500 hover:text-yellow-400 hover:bg-yellow-400/20")} 
+                                            >
+                                                <Star size={12} className={clsx(agent.priority && "fill-yellow-400")} />
+                                            </button>
+                                        </Tooltip>
+
                                         <Tooltip content="Rename">
                                             <button 
                                                 onClick={() => {

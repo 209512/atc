@@ -8,7 +8,7 @@ import {
     Play, Pause, Square, Lock, Unlock, 
     Activity, ShieldAlert, Cpu, Radio,
     Volume2, VolumeX, Speaker, MicOff,
-    MoreHorizontal, Settings, GripVertical, ChevronDown, X
+    MoreHorizontal, Settings, GripVertical, ChevronDown, X, Star, Zap, Trash2
 } from 'lucide-react';
 import { useATC } from '../context/ATCContext';
 
@@ -35,6 +35,8 @@ export const Sidebar = () => {
     terminateAgent,
     togglePause,
     toggleGlobalStop,
+    togglePriority,
+    transferLock
   } = useATC();
 
   const resizerRef = useRef<HTMLDivElement>(null);
@@ -154,7 +156,10 @@ export const Sidebar = () => {
         {/* Resizer Handle */}
         <div 
             ref={resizerRef}
-            className="fixed top-0 bottom-0 z-[60] w-1 cursor-col-resize hover:bg-blue-500/50 transition-colors"
+            className={clsx(
+                "fixed top-0 bottom-0 z-[60] w-1 cursor-col-resize transition-colors",
+                isResizing ? "bg-blue-500" : "hover:bg-blue-500/50"
+            )}
             style={{ right: sidebarWidth }}
             onMouseDown={handleMouseDown}
         />
@@ -391,10 +396,12 @@ export const Sidebar = () => {
                                             state.holder === agent.id 
                                                 ? "bg-emerald-500/10 border-emerald-500/50" 
                                                 : (agent.status === 'paused' 
-                                                    ? "bg-red-900/80 border-red-500 text-white" // Removed grayscale, increased opacity, explicit text color
-                                                    : (agent.id === selectedAgentId 
-                                                        ? (isDark ? "bg-blue-900/20 border-blue-500/50" : "bg-blue-50 border-blue-300")
-                                                        : (isDark ? "bg-gray-800/50 border-gray-800 hover:bg-gray-800" : "bg-white border-slate-200 hover:border-slate-300")))
+                                                    ? "bg-red-900/80 border-red-500 text-white" 
+                                                    : (agent.priority 
+                                                        ? "bg-yellow-500/10 border-yellow-500/50" // Priority Highlight
+                                                        : (agent.id === selectedAgentId 
+                                                            ? (isDark ? "bg-blue-900/20 border-blue-500/50" : "bg-blue-50 border-blue-300")
+                                                            : (isDark ? "bg-gray-800/50 border-gray-800 hover:bg-gray-800" : "bg-white border-slate-200 hover:border-slate-300"))))
                                         )}
                                     >
                                         <div className="flex justify-between items-start mb-1 min-w-0">
@@ -456,13 +463,42 @@ export const Sidebar = () => {
                                                     <span className="truncate max-w-[100px]">{agent.resource || 'N/A'}</span>
                                                 </div>
                                                 <div className="flex gap-2 mt-2">
+                                                    {/* Priority Toggle */}
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            togglePriority(agent.id, !agent.priority);
+                                                        }}
+                                                        className={clsx("flex-1 py-1 rounded text-center flex items-center justify-center gap-1", 
+                                                            agent.priority ? "bg-yellow-500/20 text-yellow-400" : "bg-gray-700/50 text-gray-400 hover:text-yellow-400"
+                                                        )}
+                                                    >
+                                                        <Star size={10} className={clsx(agent.priority && "fill-current")} />
+                                                        {agent.priority ? "REVOKE VIP" : "GRANT VIP"}
+                                                    </button>
+                                                    
+                                                    {/* Transfer Lock */}
+                                                    {state.holder && state.holder !== agent.id && !agent.status.includes('paused') && (
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                transferLock(agent.id);
+                                                            }}
+                                                            className="flex-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 py-1 rounded text-center flex items-center justify-center gap-1"
+                                                        >
+                                                            <Zap size={10} />
+                                                            SEIZE
+                                                        </button>
+                                                    )}
+
                                                     <button 
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             terminateAgent(agent.id);
                                                         }}
-                                                        className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-1 rounded text-center"
+                                                        className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-1 rounded text-center flex items-center justify-center gap-1"
                                                     >
+                                                        <Trash2 size={10} />
                                                         TERMINATE
                                                     </button>
                                                 </div>

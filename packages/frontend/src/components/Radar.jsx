@@ -4,7 +4,7 @@ import { OrbitControls, Text, Line, Html, Sphere } from '@react-three/drei';
 import * as THREE from 'three';
 import clsx from 'clsx';
 import { useATC } from '../context/ATCContext';
-import { X } from 'lucide-react';
+import { X, Star, Zap, Trash2 } from 'lucide-react';
 
 const CentralHub = ({ isLocked, isOverride, holder, isDark }) => {
     const ref = useRef();
@@ -42,7 +42,7 @@ const CentralHub = ({ isLocked, isOverride, holder, isDark }) => {
 // ... (Subcomponents remain largely same, but can use useATC if needed, but props are cleaner for sub-renderers)
 // Actually, Radar component receives props in original. Now it should use context.
 
-const AgentDrone = ({ id, position, isLocked, isOverride, color, isDark, onClick, isSelected, isPaused }) => {
+const AgentDrone = ({ id, position, isLocked, isOverride, color, isDark, onClick, isSelected, isPaused, isPriority }) => {
     const mesh = useRef();
     const textureRef = useRef();
     
@@ -57,9 +57,13 @@ const AgentDrone = ({ id, position, isLocked, isOverride, color, isDark, onClick
                 mesh.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * 2 + position[0]) * 0.2;
             }
             
-            // Pulse scale on selection
+            // Pulse scale on selection or Priority
             if (isSelected) {
                 const s = 1 + Math.sin(state.clock.elapsedTime * 5) * 0.1;
+                mesh.current.scale.set(s, s, s);
+            } else if (isPriority) {
+                // Subtle pulse for priority
+                const s = 1 + Math.sin(state.clock.elapsedTime * 2) * 0.05;
                 mesh.current.scale.set(s, s, s);
             } else {
                 mesh.current.scale.set(1, 1, 1);
@@ -68,9 +72,12 @@ const AgentDrone = ({ id, position, isLocked, isOverride, color, isDark, onClick
     });
 
     // Determine colors based on state
-    const coreColor = isOverride ? '#ef4444' : (isPaused ? '#374151' : (isLocked ? '#10b981' : color)); // Paused: Dark Gray
-    const emissiveColor = isOverride ? '#ef4444' : (isLocked ? '#10b981' : (isPaused ? '#000000' : color)); // Paused: No emission (Black)
-    const emissiveIntensity = isLocked || isOverride ? 2 : (isSelected ? 1 : (isPaused ? 0 : 0.5));
+    // Priority Override Color: Gold (#facc15)
+    const baseColor = isPriority ? '#facc15' : color;
+    
+    const coreColor = isOverride ? '#ef4444' : (isPaused ? '#374151' : (isLocked ? '#10b981' : baseColor)); // Paused: Dark Gray
+    const emissiveColor = isOverride ? '#ef4444' : (isLocked ? '#10b981' : (isPaused ? '#000000' : baseColor)); // Paused: No emission (Black)
+    const emissiveIntensity = isLocked || isOverride ? 2 : (isSelected || isPriority ? 1 : (isPaused ? 0 : 0.5));
 
     return (
         <group position={position} ref={mesh} onClick={(e) => { 
@@ -102,15 +109,18 @@ const AgentDrone = ({ id, position, isLocked, isOverride, color, isDark, onClick
             {/* Label Overlay - Dim when paused */}
             <Html position={[0, 0.8, 0]} center distanceFactor={10} zIndexRange={[50, 0]}>
                 <div className={clsx(
-                    "px-1.5 py-0.5 rounded text-[8px] font-mono whitespace-nowrap border backdrop-blur-sm transition-all",
+                    "px-1.5 py-0.5 rounded text-[8px] font-mono whitespace-nowrap border backdrop-blur-sm transition-all flex items-center gap-1",
                     isOverride 
                         ? "bg-red-500/20 border-red-500 text-red-500 animate-pulse" 
                         : (isPaused 
                             ? "bg-gray-800/50 border-gray-700 text-gray-500" 
                             : (isLocked 
                                 ? "bg-emerald-500/20 border-emerald-500 text-emerald-500 scale-110 font-bold" 
-                                : (isDark ? "bg-black/40 border-white/20 text-white/70" : "bg-white/60 border-black/10 text-black/70")))
+                                : (isPriority
+                                    ? "bg-yellow-500/20 border-yellow-500 text-yellow-400 font-bold"
+                                    : (isDark ? "bg-black/40 border-white/20 text-white/70" : "bg-white/60 border-black/10 text-black/70"))))
                 )}>
+                    {isPriority && <Star size={8} className="fill-current" />}
                     {id}
                     {isLocked && " [LOCKED]"}
                     {isPaused && " [PAUSED]"}
@@ -131,7 +141,7 @@ const AgentDrone = ({ id, position, isLocked, isOverride, color, isDark, onClick
     );
 };
 
-const AgentDetailPopup = ({ agent, onClose, isDark, onTerminate }) => {
+const AgentDetailPopup = ({ agent, onClose, isDark, onTerminate, onTogglePriority, onTransferLock }) => {
     if (!agent) return null;
     return (
         <Html position={[0, 0, 0]} style={{ pointerEvents: 'none' }} zIndexRange={[99999, 0]}>
@@ -148,22 +158,49 @@ const AgentDetailPopup = ({ agent, onClose, isDark, onTerminate }) => {
                 </div>
                 <div className="space-y-1 text-xs font-mono">
                     <div className="flex justify-between"><span>STATUS:</span> <span className={agent.status === 'paused' ? 'text-yellow-500' : 'text-emerald-500'}>{agent.status.toUpperCase()}</span></div>
-                    <div className="flex justify-between"><span>PRIORITY:</span> <span>{agent.priority || 'NORMAL'}</span></div>
+                    <div className="flex justify-between"><span>PRIORITY:</span> <span>{agent.priority ? 'HIGH' : 'NORMAL'}</span></div>
                     <div className="flex justify-between"><span>RESOURCE:</span> <span className="truncate max-w-[100px]">{agent.resource || 'NONE'}</span></div>
                     <div className="flex justify-between"><span>LATENCY:</span> <span>{Math.floor(Math.random() * 50 + 10)}ms</span></div>
                 </div>
-                 <button 
-                    onClick={() => onTerminate(agent.id)}
-                    className="w-full mt-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-1 rounded text-xs border border-red-500/30"
-                >
-                    TERMINATE LINK
-                </button>
+                
+                <div className="grid grid-cols-3 gap-2 mt-3">
+                     {/* Priority Button */}
+                    <button 
+                        onClick={() => onTogglePriority(agent.id, !agent.priority)}
+                        className={clsx(
+                            "flex items-center justify-center py-1 rounded border transition-colors",
+                            agent.priority 
+                                ? "bg-yellow-500/20 border-yellow-500 text-yellow-500" 
+                                : "bg-gray-500/10 border-gray-500/30 text-gray-500 hover:text-yellow-500 hover:border-yellow-500"
+                        )}
+                        title={agent.priority ? "Revoke Priority" : "Grant Priority"}
+                    >
+                        <Star size={14} className={agent.priority ? "fill-current" : ""} />
+                    </button>
+
+                    {/* Transfer Lock Button */}
+                    <button 
+                        onClick={() => onTransferLock(agent.id)}
+                        className="flex items-center justify-center py-1 rounded border bg-blue-500/10 border-blue-500/30 text-blue-500 hover:bg-blue-500/20 hover:border-blue-500 transition-colors"
+                        title="Seize Lock (Transfer)"
+                    >
+                        <Zap size={14} />
+                    </button>
+
+                    {/* Terminate Button */}
+                    <button 
+                        onClick={() => onTerminate(agent.id)}
+                        className="flex items-center justify-center py-1 rounded border bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20 hover:border-red-500 transition-colors"
+                        title="Terminate Link"
+                    >
+                        <Trash2 size={14} />
+                    </button>
+                </div>
             </div>
         </Html>
     );
 };
 
-// Particles / Space Dust
 const LightModeDust = ({ isDark }) => {
     const count = 4000;
     const [positions, colors] = useMemo(() => {
@@ -218,7 +255,7 @@ const LightModeDust = ({ isDark }) => {
   };
 
 export const Radar = ({ compact = false, isMainView = false }) => {
-    const { state, agents, isDark, setSelectedAgentId, selectedAgentId, terminateAgent } = useATC();
+    const { state, agents, isDark, setSelectedAgentId, selectedAgentId, terminateAgent, togglePriority, transferLock } = useATC();
     const { holder, overrideSignal, globalStop } = state;
     
     // Calculate Agent Positions based on ID hash or index
@@ -278,6 +315,7 @@ export const Radar = ({ compact = false, isMainView = false }) => {
                         onClick={setSelectedAgentId}
                         isSelected={selectedAgentId === agent.id}
                         isPaused={agent.status === 'paused' || globalStop}
+                        isPriority={agent.priority}
                     />
                 ))}
 
@@ -288,6 +326,8 @@ export const Radar = ({ compact = false, isMainView = false }) => {
                         onClose={() => setSelectedAgentId(null)}
                         isDark={isDark}
                         onTerminate={(id) => terminateAgent(id)}
+                        onTogglePriority={togglePriority}
+                        onTransferLock={transferLock}
                     />
                 )}
 

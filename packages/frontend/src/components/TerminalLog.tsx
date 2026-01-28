@@ -16,18 +16,14 @@ export const TerminalLog = () => {
   }
 
   const [logs, setLogs] = useState<Log[]>([]);
-  const [filter, setFilter] = useState('ALL'); // ALL | CRITICAL | WARN | INFO
-  const [autoScroll, setAutoScroll] = useState(true); // Restored Auto-scroll
-  const [isMuted, setIsMuted] = useState(false); // Restored Local Mute
-  const [isCollapsed, setIsCollapsed] = useState(false); // New Collapse State
+  const [filter, setFilter] = useState('ALL');
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const nodeRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null); // Added scroll container ref
-
-  // Sound Refs (Using AudioContext from Context is better, but local logic here for specific log sounds if needed)
-  // For now, we rely on global sounds, but this component was doing its own thing? 
-  // No, the original only displayed logs.
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
       // Logic to add logs based on state changes
@@ -64,16 +60,14 @@ export const TerminalLog = () => {
       <Draggable nodeRef={nodeRef} handle=".handle" bounds="body">
             <div 
                 ref={nodeRef} 
-                className="fixed bottom-10 z-40 flex flex-col items-start font-mono min-w-0 overflow-visible"
-                style={{ right: sidebarWidth + 20 }}
+                className="fixed z-40 flex flex-col items-start font-mono min-w-0 overflow-visible"
+                style={{ right: sidebarWidth + 20, top: 'calc(100vh - 250px)' }}
             >
-                {/* Resize Handles */}
                 <div className={clsx(
                     "w-[400px] rounded-lg border shadow-xl backdrop-blur-md flex flex-col text-xs transition-none overflow-visible z-[10000]",
                     isDark ? "bg-[#0d1117]/90 border-gray-800 text-gray-300" : "bg-slate-50/80 border-slate-200/40 text-slate-800",
                     isCollapsed ? "h-10" : "h-[200px]"
                 )}>
-                    {/* Header */}
                     <div className={clsx("flex justify-between items-center p-2 border-b handle cursor-move h-10 shrink-0 rounded-t-lg overflow-visible",
                         isDark ? "bg-gray-800/20 border-gray-800" : "bg-white/40 border-slate-200/40"
                     )}>
@@ -81,10 +75,9 @@ export const TerminalLog = () => {
                             <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
                             <Tooltip content="System Event Log" position="bottom-right">
                                 TERMINAL_OUT
-                            </Tooltip>
+                        </Tooltip>
                         </span>
                         <div className="flex items-center gap-2">
-                             {/* Restored Controls */}
                              {!isCollapsed && (
                                  <>
                                     <Tooltip content="Toggle Auto-scroll" position="bottom">
@@ -105,7 +98,7 @@ export const TerminalLog = () => {
                                     </Tooltip>
                                     <div className="w-px h-3 bg-white/10 mx-1" />
                                     
-                                    {['ALL', 'CRITICAL', 'INFO'].map(f => (
+                                    {['ALL', 'CRITICAL', 'WARN', 'INFO'].map(f => (
                                         <button 
                                             key={f}
                                             onClick={() => setFilter(f)}
@@ -117,7 +110,6 @@ export const TerminalLog = () => {
                                  </>
                              )}
                              
-                             {/* Collapse Toggle (Moved to Right) */}
                              <button 
                                  onClick={() => setIsCollapsed(!isCollapsed)}
                                  className={clsx("p-1 rounded hover:bg-white/10 transition-none", isCollapsed && "rotate-180")}
@@ -127,7 +119,6 @@ export const TerminalLog = () => {
                         </div>
                     </div>
 
-                    {/* Logs */}
                     {!isCollapsed && (
                         <div ref={scrollRef} className="flex-1 overflow-y-auto p-2 space-y-1 font-mono rounded-b-lg">
                             {filteredLogs.map(log => (
