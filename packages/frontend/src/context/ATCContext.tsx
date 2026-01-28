@@ -12,6 +12,7 @@ export interface ATCState {
     latency: number;
     timestamp: number;
     globalStop: boolean;
+    priorityCollisionTrigger?: number;
 }
 
 export interface Agent {
@@ -21,7 +22,7 @@ export interface Agent {
     activity?: string;
     model?: string;
     lastActive?: number;
-    priority?: string;
+    priority?: boolean;
 }
 
 interface ATCContextType {
@@ -33,9 +34,12 @@ interface ATCContextType {
     releaseLock: () => Promise<void>;
     setTrafficIntensity: (count: number) => Promise<void>;
     togglePause: (agentId: string, isPaused: boolean) => Promise<void>;
+    togglePriority: (agentId: string, enable: boolean) => Promise<void>;
+    transferLock: (agentId: string) => Promise<void>;
     terminateAgent: (agentId: string) => Promise<void>;
     startRenaming: (agent: Agent) => void;
     submitRename: (oldId: string, newName: string) => Promise<boolean>;
+    lastRename: { from: string; to: string } | null;
     toggleGlobalStop: () => Promise<void>;
     
     // UI State
@@ -105,23 +109,24 @@ export const ATCProvider = ({ children }: { children: ReactNode }) => {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(true);
   const [areTooltipsEnabled, setAreTooltipsEnabled] = useState(true);
+  const [lastRename, setLastRename] = useState<{ from: string; to: string } | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
-  // Track paused agents locally to override server state until confirmed
   const pausedAgentsRef = useRef<Set<string>>(new Set());
+  // Track terminated agents to filter them out from polling/SSE
+  const terminatedAgentsRef = useRef<Set<string>>(new Set());
 
   // Sound Effect Helper
-  const playSound = useCallback((type: 'admin' | 'agent') => {
-    // Check global stop or specific mute
+  const playSound = useCallback((type: 'admin' | 'agent' | 'priority_alarm') => {
     if (type === 'admin' && isAdminMuted) return;
     if (type === 'agent' && isAgentMuted) return;
+    if (type === 'priority_alarm' && isAdminMuted) return;
 
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
     
-    // Resume context if suspended (browser autoplay policy)
     if (audioContextRef.current.state === 'suspended') {
         audioContextRef.current.resume();
     }
@@ -137,7 +142,7 @@ export const ATCProvider = ({ children }: { children: ReactNode }) => {
 
     const now = ctx.currentTime;
     
-    if (type === 'admin') { // Override Sound (Siren)
+    if (type === 'admin') {
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(880, now);
       osc.frequency.linearRampToValueAtTime(440, now + 0.3);
@@ -145,7 +150,16 @@ export const ATCProvider = ({ children }: { children: ReactNode }) => {
       gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
       osc.start(now);
       osc.stop(now + 0.3);
-    } else if (type === 'agent') { // Lock Acquired (Ping)
+    } else if (type === 'priority_alarm') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.linearRampToValueAtTime(800, now + 0.1);
+        osc.frequency.linearRampToValueAtTime(600, now + 0.2);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+        osc.start(now);
+        osc.stop(now + 0.4);
+    } else if (type === 'agent') {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(1200, now);
       osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
@@ -156,19 +170,14 @@ export const ATCProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isAdminMuted, isAgentMuted]);
 
-  // Resume AudioContext on user interaction
   useEffect(() => {
     const handleUserGesture = () => {
       if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume().then(() => {
-          console.log('🔊 AudioContext Resumed by User Gesture');
-        });
+        audioContextRef.current.resume();
       }
     };
-
     window.addEventListener('click', handleUserGesture);
     window.addEventListener('keydown', handleUserGesture);
-
     return () => {
       window.removeEventListener('click', handleUserGesture);
       window.removeEventListener('keydown', handleUserGesture);
@@ -180,26 +189,31 @@ export const ATCProvider = ({ children }: { children: ReactNode }) => {
     const eventSource = new EventSource('http://localhost:3000/api/stream');
     eventSourceRef.current = eventSource;
 
-    eventSource.onopen = () => {
-      console.log('✅ Connected to ATC Controller (SSE)');
-      setIsConnected(true);
-    };
-
-    eventSource.onerror = (err) => {
-      console.warn('❌ Disconnected from ATC Controller (SSE)', err);
-      setIsConnected(false);
-    };
+    eventSource.onopen = () => setIsConnected(true);
+    eventSource.onerror = () => setIsConnected(false);
 
     eventSource.onmessage = (event) => {
       try {
-        const newState = JSON.parse(event.data);
+        const incomingData = JSON.parse(event.data);
+        
+        // --- Enhance SSE Filtering: Use latest Ref within setState updater ---
         setState(prev => {
-          // Sound Triggers based on state change
-          if (newState.overrideSignal && !prev.overrideSignal) playSound('admin');
-          if (newState.holder && newState.holder !== prev.holder && !newState.holder.includes('Human')) {
-               playSound('agent');
-          }
-          return newState;
+            const isTerminated = (id: string | null) => id ? terminatedAgentsRef.current.has(id) : false;
+
+            const filteredHolder = isTerminated(incomingData.holder) ? null : incomingData.holder;
+            const filteredWaiting = (incomingData.waitingAgents || []).filter((id: string) => !isTerminated(id));
+
+            const newState = { 
+                ...incomingData, 
+                holder: filteredHolder, 
+                waitingAgents: filteredWaiting 
+            };
+
+            if (newState.overrideSignal && !prev.overrideSignal) playSound('admin');
+            if (newState.priorityCollisionTrigger && newState.priorityCollisionTrigger !== prev.priorityCollisionTrigger) playSound('priority_alarm');
+            if (newState.holder && newState.holder !== prev.holder && !newState.holder.includes('Human')) playSound('agent');
+            
+            return newState;
         });
       } catch (err) {
         console.error('SSE Parse Error:', err);
@@ -211,14 +225,32 @@ export const ATCProvider = ({ children }: { children: ReactNode }) => {
         fetch('http://localhost:3000/api/agents/status')
             .then(res => res.json())
             .then(data => {
-                // Merge Logic: Override server status with local pause state
-                const mergedAgents = data.map((agent: Agent) => {
-                    if (pausedAgentsRef.current.has(agent.id)) {
-                        return { ...agent, status: 'paused' };
+                setAgents(prev => {
+                    let filteredData = data.filter((a: Agent) => !terminatedAgentsRef.current.has(a.id));
+                    
+                    if (lastRename) {
+                        filteredData = filteredData.filter((a: Agent) => a.id !== lastRename.from);
                     }
-                    return agent;
+
+                    const incomingMap = new Map(filteredData.map((a: Agent) => [a.id, a]));
+                    
+                    if (lastRename && !incomingMap.has(lastRename.to)) {
+                        const existingInState = prev.find(a => a.id === lastRename.to);
+                        if (existingInState) {
+                            incomingMap.set(lastRename.to, existingInState);
+                        }
+                    }
+
+                    const finalAgents = Array.from(incomingMap.values()).map((agent: unknown) => {
+                        const typedAgent = agent as Agent;
+                        if (pausedAgentsRef.current.has(typedAgent.id)) {
+                            return { ...typedAgent, status: 'paused' };
+                        }
+                        return typedAgent;
+                    });
+
+                    return finalAgents.sort((a, b) => a.id.localeCompare(b.id, undefined, {numeric: true}));
                 });
-                setAgents(mergedAgents);
             })
             .catch(err => console.error("Agent Poll Error:", err));
     }, 1000);
@@ -227,7 +259,7 @@ export const ATCProvider = ({ children }: { children: ReactNode }) => {
       eventSource.close();
       clearInterval(pollInterval);
     };
-  }, [playSound]);
+  }, [playSound, lastRename]);
 
   // Actions
   const triggerOverride = useCallback(async () => {
@@ -262,13 +294,8 @@ export const ATCProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const togglePause = useCallback(async (agentId: string, isPaused: boolean) => {
-      // Optimistic update
-      // Update local ref immediately
-      if (!isPaused) { // We are pausing (current state is NOT paused)
-          pausedAgentsRef.current.add(agentId);
-      } else {
-          pausedAgentsRef.current.delete(agentId);
-      }
+      if (!isPaused) pausedAgentsRef.current.add(agentId);
+      else pausedAgentsRef.current.delete(agentId);
 
       setAgents(prev => prev.map(a => 
           a.id === agentId ? { ...a, status: isPaused ? 'idle' : 'paused' } : a
@@ -278,130 +305,117 @@ export const ATCProvider = ({ children }: { children: ReactNode }) => {
           await fetch(`http://localhost:3000/api/agents/${agentId}/pause`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pause: !isPaused }) // If currently paused, we want to unpause (false). Logic checks out.
+              body: JSON.stringify({ pause: !isPaused })
           });
       } catch (e) { 
-          // Revert on error
           if (!isPaused) pausedAgentsRef.current.delete(agentId);
           else pausedAgentsRef.current.add(agentId);
           console.error(e); 
       }
   }, []);
 
-  const terminateAgent = useCallback(async (agentId: string) => {
+  const togglePriority = useCallback(async (agentId: string, enable: boolean) => {
+      setAgents(prev => prev.map(a => 
+          a.id === agentId ? { ...a, priority: enable } : a
+      ));
       try {
-          await fetch(`http://localhost:3000/api/agents/${agentId}`, { method: 'DELETE' });
+          await fetch(`http://localhost:3000/api/agents/${agentId}/priority`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ enable })
+          });
       } catch (e) { console.error(e); }
   }, []);
-  
-  const startRenaming = useCallback((agent: Agent) => {
-      // Handled locally in component usually
+
+  const transferLock = useCallback(async (agentId: string) => {
+      try {
+          await fetch(`http://localhost:3000/api/agents/${agentId}/transfer-lock`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+          });
+      } catch (e) { console.error(e); }
   }, []);
 
-  const submitRename = useCallback(async (oldId: string, newName: string) => {
+  const terminateAgent = useCallback(async (agentId: string) => {
+      // 1. Add to blocklist
+      terminatedAgentsRef.current.add(agentId);
+
+      // 2. Optimistic update for agent list and global state
+      setAgents(prev => prev.filter(a => a.id !== agentId));
+      setState(prev => ({
+          ...prev,
+          holder: prev.holder === agentId ? null : prev.holder,
+          waitingAgents: prev.waitingAgents.filter(id => id !== agentId),
+          activeAgentCount: Math.max(0, prev.activeAgentCount - 1)
+      }));
+
+      if (selectedAgentId === agentId) {
+          setSelectedAgentId(null);
+      }
+
       try {
-          await fetch(`http://localhost:3000/api/agents/${oldId}/rename`, {
+          const res = await fetch(`http://localhost:3000/api/agents/${agentId}`, { method: 'DELETE' });
+          if (!res.ok) throw new Error("Agent Termination Failed");
+          
+          // Ensure server sync by unblocking after sufficient time (5s)
+          setTimeout(() => {
+              terminatedAgentsRef.current.delete(agentId);
+          }, 5000);
+      } catch (e) { 
+          console.error("Terminate Error:", e);
+          terminatedAgentsRef.current.delete(agentId);
+      }
+  }, [selectedAgentId]);
+  
+  const startRenaming = useCallback((agent: Agent) => {}, []);
+
+  const submitRename = useCallback(async (oldId: string, newName: string) => {
+      setLastRename({ from: oldId, to: newName });
+
+      setAgents(prev => prev.map(a => 
+          a.id === oldId ? { ...a, id: newName } : a
+      ));
+
+      setState(prev => {
+          const newState = { ...prev };
+          if (newState.holder === oldId) newState.holder = newName;
+          newState.waitingAgents = newState.waitingAgents.map(id => id === oldId ? newName : id);
+          return newState;
+      });
+
+      if (pausedAgentsRef.current.has(oldId)) {
+          pausedAgentsRef.current.delete(oldId);
+          pausedAgentsRef.current.add(newName);
+      }
+      if (selectedAgentId === oldId) setSelectedAgentId(newName);
+
+      try {
+          const res = await fetch(`http://localhost:3000/api/agents/${oldId}/rename`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ newId: newName })
           });
+          if (!res.ok) throw new Error("Rename Failed");
           return true;
       } catch (e) {
           console.error(e);
+          setLastRename(null);
+          setAgents(prev => prev.map(a => a.id === newName ? { ...a, id: oldId } : a));
+          if (pausedAgentsRef.current.has(newName)) {
+             pausedAgentsRef.current.delete(newName);
+             pausedAgentsRef.current.add(oldId);
+          }
           return false;
       }
-  }, []);
+  }, [selectedAgentId]);
   
   const toggleGlobalStop = useCallback(async () => {
       const newState = !state.globalStop;
-      
-      // If we are RESUMING (newState === false), we need to ensure agents that were manually paused 
-      // remain paused in our local optimistic state.
-      // Currently, the server logic for global stop might be overriding individual pause states?
-      // Let's check: The server uses `this.state.globalStop`. 
-      // Agents check `atcService.state.globalStop`.
-      // If globalStop is true, everyone stops.
-      // If globalStop is false, agents check their own pause state.
-      
-      // The issue is likely that `pausedAgentsRef` is not being respected when global stop is lifted?
-      // Or simply that the UI needs to know if an agent is paused via Global vs Individual.
-      
-      // Actually, if we use `togglePause` individually, we update `pausedAgentsRef`.
-      // When we toggle Global Stop, `state.globalStop` changes.
-      
-      // The `mergedAgents` logic in pollInterval:
-      /*
-        const mergedAgents = data.map((agent: Agent) => {
-            if (pausedAgentsRef.current.has(agent.id)) {
-                return { ...agent, status: 'paused' };
-            }
-            return agent;
-        });
-      */
-      // This looks correct for individual pause.
-      
-      // But if Global Stop is ON, the server might report 'paused' for everyone?
-      // If server reports 'paused' for everyone, `mergedAgents` will show 'paused'.
-      // When Global Stop turns OFF, server reports 'idle'/'active'.
-      // `pausedAgentsRef` should still have the manually paused ID.
-      // So `mergedAgents` should still return 'paused' for that one.
-      
-      // Wait, if the user manually pauses Agent A. `pausedAgentsRef` has A.
-      // User toggles Global Stop ON. Server stops everyone.
-      // User toggles Global Stop OFF. Server resumes everyone.
-      // `pausedAgentsRef` still has A.
-      // So Agent A should remain paused.
-      
-      // I need to verify why the user says "individual pause is released".
-      // Maybe the server clears individual pause commands when global stop is toggled?
-      // Let's look at `atc.service.js`.
-      // It just sets `this.state.globalStop`.
-      // It does NOT clear `MAP_AGENT_COMMANDS`.
-      
-      // However, maybe the frontend `togglePause` logic has a flaw?
-      // Or maybe the user *wants* to ensure that if they paused A, then Global Pause, then Global Resume, A stays paused.
-      // My logic *should* support that.
-      
-      // Let's re-read the user complaint:
-      // "개별 일시정지 후 전체 일시정지 버튼 눌렀다 해제하면 개별일시정지 버튼 눌렀던 것은 일시정지가 해제 안되는 것 고쳐."
-      // "Fix: Individual pause NOT being released when Global Pause is toggled off."
-      // Wait. "일시정지가 해제 안되는 것 고쳐" -> "Fix the fact that it DOES NOT release".
-      // Meaning: They WANT it to release? Or they WANT it to NOT release?
-      // "개별 일시정지 후 (Individual Pause ON) -> 전체 일시정지 ON -> 전체 일시정지 OFF -> 개별 일시정지 버튼 눌렀던 것은 일시정지가 해제 안되는 것 고쳐."
-      // This phrasing is ambiguous.
-      // Interpretation A: "It stays paused (as it should), but I want it to UNPAUSE." (Global Resume = Reset All)
-      // Interpretation B: "It UNPAUSES (which is wrong), I want it to STAY PAUSED." (Individual preference preserved)
-      // "해제 안되는 것 고쳐" literally means "Fix the thing where it is NOT released".
-      // So currently it is NOT released (it stays paused). User wants to fix this.
-      // So User wants: Global Resume -> SHOULD RELEASE EVERYTHING including manually paused ones?
-      
-      // Context: "Fix individual pause button state not reverting when global pause is toggled off"
-      // Usually "Fix X not Y" means "Make X do Y".
-      // So "Fix individual pause ... not releasing" -> "Make individual pause release".
-      
-      // IF the user wants Global Resume to UNPAUSE EVERYTHING:
-      // Then I should clear `pausedAgentsRef` when `toggleGlobalStop(false)` is called.
-      
-      if (!newState) { // Resuming globally
-           pausedAgentsRef.current.clear(); // Clear all manual pauses
-           // We also need to tell server to clear all pause commands?
-           // The server `pauseAgent` writes to `MAP_AGENT_COMMANDS`.
-           // `toggleGlobalStop` only flips a boolean.
-           // If we want to clear individual pauses, we need to send unpause requests for all of them?
-           // Or add an API to clear all commands.
-           
-           // For now, let's clear the local ref so UI updates immediately.
-           // And maybe iterate and unpause them?
-           // Or is there a "Reset All" API? No.
-           // I will clear local ref and iterate `pausedAgentsRef` before clearing to send requests.
-           
+      if (!newState) {
            const agentsToResume = Array.from(pausedAgentsRef.current);
-           agentsToResume.forEach(id => {
-               togglePause(id, true); // true = currently paused, so unpause
-           });
+           agentsToResume.forEach(id => togglePause(id, true));
            pausedAgentsRef.current.clear();
       }
-
       try {
           await fetch('http://localhost:3000/api/stop', {
               method: 'POST',
@@ -412,42 +426,19 @@ export const ATCProvider = ({ children }: { children: ReactNode }) => {
   }, [state.globalStop, togglePause]);
 
   const value: ATCContextType = {
-    state,
-    agents,
-    setAgents,
-    isConnected,
-    triggerOverride,
-    releaseLock,
-    setTrafficIntensity,
-    togglePause,
-    terminateAgent,
-    startRenaming,
-    submitRename,
-    toggleGlobalStop,
-    // UI State
-    sidebarWidth, setSidebarWidth,
-    viewMode, setViewMode,
-    selectedAgentId, setSelectedAgentId,
-    isDark, setIsDark,
-    areTooltipsEnabled, setAreTooltipsEnabled,
-    // Audio State
-    isAdminMuted, setIsAdminMuted,
-    isAgentMuted, setIsAgentMuted,
-    // Settings State
-    settings, updateSettings
+    state, agents, setAgents, isConnected, triggerOverride, releaseLock, setTrafficIntensity,
+    togglePause, togglePriority, transferLock, terminateAgent, startRenaming, submitRename,
+    lastRename, toggleGlobalStop,
+    sidebarWidth, setSidebarWidth, viewMode, setViewMode,
+    selectedAgentId, setSelectedAgentId, isDark, setIsDark, areTooltipsEnabled, setAreTooltipsEnabled,
+    isAdminMuted, setIsAdminMuted, isAgentMuted, setIsAgentMuted, settings, updateSettings
   };
 
-  return (
-    <ATCContext.Provider value={value}>
-      {children}
-    </ATCContext.Provider>
-  );
+  return <ATCContext.Provider value={value}>{children}</ATCContext.Provider>;
 };
 
 export const useATC = () => {
   const context = useContext(ATCContext);
-  if (!context) {
-    throw new Error('useATC must be used within an ATCProvider');
-  }
+  if (!context) throw new Error('useATC must be used within an ATCProvider');
   return context;
 };
