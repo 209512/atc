@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// 2. SSE Endpoint
+// SSE Endpoint
 app.get('/api/stream', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -30,7 +30,7 @@ app.get('/api/stream', (req, res) => {
   });
 });
 
-// 3. API Endpoints
+// API Endpoints
 app.post('/api/override', async (req, res) => {
   const result = await atcService.humanOverride();
   res.json(result);
@@ -54,20 +54,35 @@ app.post('/api/agents/:id/pause', async (req, res) => {
     res.json({ success: true });
 });
 
-// [New] Terminate Agent
+// Terminate Agent
 app.delete('/api/agents/:id', async (req, res) => {
     const { id } = req.params;
     await atcService.terminateAgent(id);
     res.json({ success: true });
 });
 
-// [New] Rename Agent
+// Rename Agent
 app.post('/api/agents/:id/rename', async (req, res) => {
     const { id } = req.params;
     const { newId } = req.body;
     const result = await atcService.renameAgent(id, newId);
     if (result) res.json({ success: true });
     else res.status(404).json({ error: 'Agent not found' });
+});
+
+// Priority Toggle
+app.post('/api/agents/:id/priority', async (req, res) => {
+    const { id } = req.params;
+    const { enable } = req.body;
+    await atcService.togglePriority(id, enable);
+    res.json({ success: true });
+});
+
+// Force Transfer Lock
+app.post('/api/agents/:id/transfer-lock', async (req, res) => {
+    const { id } = req.params;
+    await atcService.transferLock(id);
+    res.json({ success: true });
 });
 
 app.get('/api/agents/status', async (req, res) => {

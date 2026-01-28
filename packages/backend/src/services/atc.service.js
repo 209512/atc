@@ -18,7 +18,9 @@ class ATCService extends EventEmitter {
       latency: 0,
       activeAgentCount: 0, 
       timestamp: Date.now(),
-      globalStop: false
+      globalStop: false,
+      priorityAgents: [], // List of IDs with priority
+      forcedCandidate: null // ID of agent allowed to seize lock
     };  
       
     this.on('agent-acquired', this.handleAgentAcquired.bind(this));  
@@ -47,8 +49,6 @@ class ATCService extends EventEmitter {
       }
   }
   
-  // Renamed from updateAgentPool to better reflect "System Congestion" control logic if needed,
-  // but for now keeping it as pool scaler.
   async updateAgentPool(targetCount) {
     if (targetCount > 10) targetCount = 10; // Hard Limit
     if (this.updateTimeout) clearTimeout(this.updateTimeout);
@@ -134,6 +134,32 @@ class ATCService extends EventEmitter {
     await this.updateAgentPool(count);  
   }  
   
+  async togglePriority(id, enable) {
+      const current = new Set(this.state.priorityAgents);
+      if (enable) current.add(id);
+      else current.delete(id);
+      
+      this.state.priorityAgents = Array.from(current);
+      console.log(`⭐ Priority ${enable ? 'Granted' : 'Revoked'} for ${id}`);
+      this.emitState();
+  }
+
+  async transferLock(targetId) {
+      console.log(`⚡ Transferring Lock to ${targetId}...`);
+      
+      // 1. Force Release Current Lock
+      await this.humanOverride(); // Seize lock as admin first to clear current holder
+      
+      // 2. Set Candidate
+      this.state.forcedCandidate = targetId;
+      this.state.holder = null; // Clear Admin holder to allow candidate to take it
+      
+      this.state.overrideSignal = false; 
+      this.emitState();
+      
+      return { success: true };
+  }
+
   async humanOverride() {  
     console.log('🚨 [Human] Initiating Administrative Override...');  
     this.state.overrideSignal = true;  
@@ -142,7 +168,17 @@ class ATCService extends EventEmitter {
     try {  
       const cp = hazelcastManager.getCPSubsystem();  
       const lock = await cp.getLock(this.state.resourceId);  
-      await new Promise(r => setTimeout(r, CONSTANTS.HUMAN_OVERRIDE_DELAY + 200));
+      
+      // Force Unlock to ensure immediate access
+      try {
+          if (await lock.isLocked()) {
+              console.log('🚨 [Admin] Force Unlocking existing holder...');
+              await lock.forceUnlock();
+          }
+      } catch (e) {
+          console.warn('Force unlock warning:', e.message);
+      }
+
       const acquiredFence = await lock.tryLock(3000);  
         
       if (acquiredFence) {  
@@ -227,8 +263,47 @@ class ATCService extends EventEmitter {
           this.agentConfigs.delete(oldId);
           this.agentConfigs.set(newId, config);
       }
+
+      // 1. Transfer Priority
+      if (this.state.priorityAgents.includes(oldId)) {
+          this.state.priorityAgents = this.state.priorityAgents.filter(id => id !== oldId);
+          this.state.priorityAgents.push(newId);
+      }
+
+      // 2. Transfer Holder Status
+      if (this.state.holder === oldId) {
+          this.state.holder = newId;
+      }
+
+      // 3. Transfer Waiting Queue
+      if (this.state.waitingAgents.includes(oldId)) {
+          const index = this.state.waitingAgents.indexOf(oldId);
+          if (index !== -1) {
+              this.state.waitingAgents[index] = newId;
+          }
+      }
+
+      // 4. Transfer Forced Candidate
+      if (this.state.forcedCandidate === oldId) {
+          this.state.forcedCandidate = newId;
+      }
+
+      // 5. Transfer Pause State (Hazelcast Map)
+      const client = hazelcastManager.getClient();
+      if (client) {
+          try {
+              const map = await client.getMap(CONSTANTS.MAP_AGENT_COMMANDS);
+              const cmd = await map.get(oldId);
+              if (cmd) {
+                  await map.put(newId, cmd);
+                  await map.remove(oldId);
+              }
+          } catch (e) {
+              console.error('Failed to transfer agent state:', e);
+          }
+      }
       
-      console.log(`🏷️ Renamed Agent: ${oldId} -> ${newId}`);
+      console.log(`🏷️ Renamed Agent: ${oldId} -> ${newId} (State Preserved)`);
       this.emitState();
       return true;
   }
@@ -247,7 +322,10 @@ class ATCService extends EventEmitter {
              // If agent is managed by this service instance
              // For distributed, we'd trust the map, but for this single-node demo:
              if (this.agents.has(entry[1].id)) {
-                 statusList.push(entry[1]);
+                 const agentInfo = entry[1];
+                 // Inject Priority Status
+                 agentInfo.priority = this.state.priorityAgents.includes(agentInfo.id);
+                 statusList.push(agentInfo);
              } else if (now - entry[1].lastUpdated < 5000) {
                  // Keep recently active distributed agents
                  statusList.push(entry[1]);
@@ -263,7 +341,14 @@ class ATCService extends EventEmitter {
     this.state.fencingToken = fence;  
     this.state.latency = latency;  
     this.state.timestamp = Date.now();  
-    this.state.waitingAgents = this.state.waitingAgents.filter(aid => aid !== id);  
+    this.state.waitingAgents = this.state.waitingAgents.filter(aid => aid !== id);
+    
+    // Clear forced candidate if they got it
+    if (this.state.forcedCandidate === id) {
+        console.log(`⚡ Transfer Complete: ${id} took the lock.`);
+        this.state.forcedCandidate = null;
+    }
+    
     this.emitState();  
   }  
   
@@ -278,6 +363,12 @@ class ATCService extends EventEmitter {
   handleAgentCollision() {  
     this.state.collisionCount++;  
     this.emitState();  
+  }
+  
+  handlePriorityCollision() {
+      this.state.collisionCount++;
+      this.state.priorityCollisionTrigger = Date.now(); // Signal for specific alarm
+      this.emitState();
   }  
   
   handleAgentWaiting({ id }) {  
