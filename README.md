@@ -107,40 +107,62 @@ graph TD
     end
 ```
 
+> **Note**: This system ensures **strong consistency** of distributed locks through the **Hazelcast CP Subsystem** running in a Dockerized environment.
+
 ---
 
 ## 📦 Installation & Setup
 
 ### Prerequisites
-- Node.js v18+
-- npm or pnpm
+- Docker & Docker Compose
+- Node.js v18+ (for local development)
+- pnpm (recommended)
 
-### 1. Clone & Install
+### 🚀 Quick Start (Recommended)
+The fastest way to launch the full stack (Frontend + Backend + Hazelcast Cluster) is via Docker Compose.
+
 ```bash
+# 1. Clone the repository
 git clone <repository-url>
 cd atc
 
-# Install dependencies for both frontend and backend
-npm install
-cd packages/backend && npm install
-cd ../frontend && npm install
+# 2. Start the entire system
+docker-compose up --build
+```
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:3000
+- **Hazelcast Management Center**: http://localhost:8080
+
+---
+
+### 💻 Local Development (Manual Setup)
+
+If you prefer to run services individually for development:
+
+#### 1. Start Infrastructure
+```bash
+# Start only the Hazelcast Cluster
+docker-compose up -d hazelcast
 ```
 
-### 2. Start the System
-You need to run the Backend and Frontend concurrently.
+#### 2. Install Dependencies
+```bash
+# Install root and workspace dependencies
+pnpm install
+```
 
+#### 3. Run Services
 **Terminal 1 (Backend):**
 ```bash
 cd packages/backend
-npm run dev
+pnpm run dev
 # Server starts on http://localhost:3000
-# Hazelcast instance initializes automatically
 ```
 
 **Terminal 2 (Frontend):**
 ```bash
 cd packages/frontend
-npm run dev
+pnpm run dev
 # Client accessible at http://localhost:5173
 ```
 
@@ -156,3 +178,10 @@ npm run dev
 | **Backend** | Node.js, Express | Event-driven REST API |
 | **Persistence** | Hazelcast IMDG | In-memory distributed data grid |
 | **Streaming** | Server-Sent Events | Unidirectional real-time state updates |
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
+

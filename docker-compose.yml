@@ -8,7 +8,7 @@ services:
       - "5701:5701"
     environment:
       - HZ_CLUSTER_NAME=dev
-      - JAVA_OPTS=-Dhazelcast.cluster.name=atc -Dhazelcast.cp.endpoints.count=1
+      - JAVA_OPTS=-Dhazelcast.cluster.name=dev -Dhazelcast.cp.endpoints.count=1
 
   # 2. ATC 백엔드
   atc-backend:
