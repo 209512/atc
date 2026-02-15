@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useContext, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import clsx from 'clsx';
-import { useATC } from '../context/ATCContext';
+import { ATCContext } from '../contexts/ATCProvider';
 
 interface TooltipProps {
     children: React.ReactNode;
@@ -18,11 +19,55 @@ export const Tooltip: React.FC<TooltipProps> = ({
     className
 }) => {
     const [isVisible, setIsVisible] = useState(false);
-    const { isDark, areTooltipsEnabled } = useATC();
-    const timeoutRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
+    const [coords, setCoords] = useState({ top: 0, left: 0 });
+    
+    const context = useContext(ATCContext);
+    const isDark = context?.isDark ?? true;
+    const areTooltipsEnabled = context?.areTooltipsEnabled ?? true;
+
+    const triggerRef = useRef<HTMLDivElement>(null);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+    const updatePosition = () => {
+        if (triggerRef.current) {
+            const rect = triggerRef.current.getBoundingClientRect();
+            let top = 0;
+            let left = 0;
+
+            // Viewport 기준 절대 위치 계산
+            switch (position) {
+                case 'top':
+                    top = rect.top - 10;
+                    left = rect.left + rect.width / 2;
+                    break;
+                case 'bottom':
+                    top = rect.bottom + 10;
+                    left = rect.left + rect.width / 2;
+                    break;
+                case 'left':
+                    top = rect.top + rect.height / 2;
+                    left = rect.left - 10;
+                    break;
+                case 'right':
+                    top = rect.top + rect.height / 2;
+                    left = rect.right + 10;
+                    break;
+                case 'bottom-left':
+                    top = rect.bottom + 10;
+                    left = rect.right;
+                    break;
+                case 'bottom-right':
+                    top = rect.bottom + 10;
+                    left = rect.left;
+                    break;
+            }
+            setCoords({ top, left });
+        }
+    };
 
     const show = () => {
-        if (!areTooltipsEnabled) return;
+        if (!areTooltipsEnabled || !content) return;
+        updatePosition();
         timeoutRef.current = setTimeout(() => setIsVisible(true), delay);
     };
 
@@ -31,38 +76,52 @@ export const Tooltip: React.FC<TooltipProps> = ({
         setIsVisible(false);
     };
 
-    const positionClasses = {
-        top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
-        bottom: 'top-full left-1/2 -translate-x-1/2 mt-2',
-        left: 'right-full top-1/2 -translate-y-1/2 mr-2',
-        right: 'left-full top-1/2 -translate-y-1/2 ml-2',
-        'bottom-left': 'top-full right-0 mt-2', // Aligns right edge to right edge of parent
-        'bottom-right': 'top-full left-0 mt-2'
+    useEffect(() => {
+        if (isVisible) {
+            window.addEventListener('scroll', updatePosition, true);
+            window.addEventListener('resize', updatePosition);
+        }
+        return () => {
+            window.removeEventListener('scroll', updatePosition, true);
+            window.removeEventListener('resize', updatePosition);
+        };
+    }, [isVisible]);
+
+    const tooltipStyles: Record<string, string> = {
+        top: '-translate-x-1/2 -translate-y-full',
+        bottom: '-translate-x-1/2',
+        left: '-translate-x-full -translate-y-1/2',
+        right: '-translate-y-1/2',
+        'bottom-left': '-translate-x-full',
+        'bottom-right': '',
     };
 
     return (
-        <div className={clsx("relative inline-block", className)} onMouseEnter={show} onMouseLeave={hide}>
+        <div 
+            ref={triggerRef} 
+            className={clsx("relative inline-block", className)} 
+            onMouseEnter={show} 
+            onMouseLeave={hide}
+            onMouseDown={hide}
+        >
             {children}
-            {isVisible && (
-                <div className={clsx(
-                    "absolute z-[10000] px-2 py-1 text-[10px] font-mono rounded whitespace-nowrap pointer-events-none transition-opacity backdrop-blur-sm",
-                    positionClasses[position],
-                    isDark ? "bg-white/90 text-black" : "bg-black/80 text-white",
-                    "shadow-lg"
-                )}>
-                    {content}
-                    {/* Arrow - Only for standard positions for now */}
-                    {['top', 'bottom', 'left', 'right'].includes(position) && (
-                        <div className={clsx(
-                            "absolute w-2 h-2 rotate-45",
-                            isDark ? "bg-white" : "bg-black",
-                            position === 'top' && "top-full left-1/2 -translate-x-1/2 -mt-1",
-                            position === 'bottom' && "bottom-full left-1/2 -translate-x-1/2 -mb-1",
-                            position === 'left' && "left-full top-1/2 -translate-y-1/2 -ml-1",
-                            position === 'right' && "right-full top-1/2 -translate-y-1/2 -mr-1"
-                        )} />
+            {isVisible && createPortal(
+                <div 
+                    className={clsx(
+                        "fixed z-[999999] px-2 py-1 text-[10px] font-mono rounded whitespace-nowrap pointer-events-none backdrop-blur-md shadow-2xl border transition-opacity duration-150 animate-in fade-in zoom-in-95",
+                        tooltipStyles[position],
+                        isDark 
+                            ? "bg-black/90 text-blue-400 border-blue-500/30" 
+                            : "bg-white/95 text-slate-800 border-slate-200"
                     )}
-                </div>
+                    style={{ 
+                        top: coords.top, 
+                        left: coords.left 
+                    }}
+                >
+                    {content}
+                </div>,
+                document.body
             )}
         </div>
     );
