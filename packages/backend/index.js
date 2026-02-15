@@ -9,28 +9,41 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// SSE Endpoint
-app.get('/api/stream', (req, res) => {
+app.get('/api/stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  const sendState = (data) => {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  const sendCombinedData = async () => {
+    try {
+      const agents = await atcService.getAgentStatus();
+      const data = {
+        state: {
+          ...atcService.state,
+          logs: atcService.logs || []
+        },
+        agents: agents
+      };
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    } catch (err) {
+      console.error("SSE 전송 에러:", err);
+    }
   };
 
-  sendState(atcService.state);
+  await sendCombinedData();
+  const updateListener = async () => {
+    await sendCombinedData();
+  };
 
-  const listener = (data) => sendState(data);
-  atcService.on('state', listener);
+  atcService.on('state', updateListener);
 
   req.on('close', () => {
-    atcService.removeListener('state', listener);
+    atcService.removeListener('state', updateListener);
+    console.log('SSE connection closed');
   });
 });
 
-// API Endpoints
 app.post('/api/override', async (req, res) => {
   const result = await atcService.humanOverride();
   res.json(result);
@@ -54,14 +67,12 @@ app.post('/api/agents/:id/pause', async (req, res) => {
     res.json({ success: true });
 });
 
-// Terminate Agent
 app.delete('/api/agents/:id', async (req, res) => {
     const { id } = req.params;
     await atcService.terminateAgent(id);
     res.json({ success: true });
 });
 
-// Rename Agent
 app.post('/api/agents/:id/rename', async (req, res) => {
     const { id } = req.params;
     const { newId } = req.body;
@@ -70,7 +81,6 @@ app.post('/api/agents/:id/rename', async (req, res) => {
     else res.status(404).json({ error: 'Agent not found' });
 });
 
-// Priority Toggle
 app.post('/api/agents/:id/priority', async (req, res) => {
     const { id } = req.params;
     const { enable } = req.body;
@@ -78,7 +88,14 @@ app.post('/api/agents/:id/priority', async (req, res) => {
     res.json({ success: true });
 });
 
-// Force Transfer Lock
+app.post('/api/agents/priority-order', async (req, res) => {
+    const { order } = req.body;
+    if (!Array.isArray(order)) return res.status(400).json({ error: 'Order must be an array' });
+    
+    await atcService.updatePriorityOrder(order);
+    res.json({ success: true });
+});
+
 app.post('/api/agents/:id/transfer-lock', async (req, res) => {
     const { id } = req.params;
     await atcService.transferLock(id);
@@ -92,7 +109,7 @@ app.get('/api/agents/status', async (req, res) => {
 
 app.post('/api/agents/scale', async (req, res) => {
   const { count } = req.body;
-  if (!count || count < 0 || count > 10) { // Enforce Hard Limit 10
+  if (!count || count < 0 || count > 10) { 
     return res.status(400).json({ error: 'Invalid agent count (0-10)' });
   }
 
