@@ -1,51 +1,102 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Draggable from 'react-draggable';
 import clsx from 'clsx';
-import { useATC } from '../context/ATCContext';
-import { Volume2, VolumeX, ArrowDownCircle, ChevronDown } from 'lucide-react'; // Added Icons
+import { useATC } from '../hooks/useATC';
+import { Volume2, VolumeX, ArrowDownCircle, ChevronDown, Save } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
 export const TerminalLog = () => {
-  const { state, isDark, isAdminMuted, isAgentMuted, sidebarWidth } = useATC();
+  const { 
+    state, 
+    isDark, 
+    isAdminMuted, 
+    toggleAdminMute, 
+    sidebarWidth 
+  } = useATC();
   
   interface Log {
       id: string;
       timestamp: string;
       type: string;
-      message: string;
+      messageTech: string; 
+      messageStd: string;  
   }
 
   const [logs, setLogs] = useState<Log[]>([]);
   const [filter, setFilter] = useState('ALL');
   const [autoScroll, setAutoScroll] = useState(true);
-  const [isMuted, setIsMuted] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [viewMode, setViewMode] = useState<'TECH' | 'STD'>('STD');
 
   const nodeRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-      // Logic to add logs based on state changes
-      if (state.overrideSignal) {
-          addLog('critical', '⚠️ EMERGENCY OVERRIDE INITIATED BY ADMIN');
-      }
-      if (state.holder && !state.holder.includes('Human')) {
-          addLog('info', `🔒 Lock Acquired by ${state.holder} (Latency: ${state.latency}ms)`);
-      }
-      if (state.collisionCount > 0 && Math.random() > 0.7) {
-           // Sample collisions to avoid spam
-           addLog('warn', `💥 Collision Detected in Sector ${Math.floor(Math.random()*9)}`);
-      }
-  }, [state.overrideSignal, state.holder, state.collisionCount]);
+  const lastHolderRef = useRef<string | null>(null);
+  const lastCandidateRef = useRef<string | null>(null); 
+  const lastOverrideRef = useRef<boolean>(false);
 
-  const addLog = (type: string, message: string) => {
-      setLogs(prev => [...prev.slice(-49), { 
+  const addLog = (type: string, messageTech: string, messageStd: string) => {
+      setLogs(prev => [...prev.slice(-199), { 
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, 
-          timestamp: new Date().toLocaleTimeString(), 
+          timestamp: new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }), 
           type, 
-          message 
+          messageTech,
+          messageStd
       }]);
+  };
+
+  useEffect(() => {
+    // [A] 강제 이양 성공 판별 (Candidate가 사라지고 Holder가 목표와 일치할 때)
+    if (!state.forcedCandidate && lastCandidateRef.current && state.holder === lastCandidateRef.current) {
+        addLog('info', 
+            `⚡ [ACQ] ${state.holder} SEIZED CONTROL`, 
+            `⚡ SUCCESS: ${state.holder} is now Master`
+        );
+        lastCandidateRef.current = null;
+        lastHolderRef.current = state.holder;
+        return;
+    }
+
+    // [B] 명령 감지 (새로운 Candidate가 설정되었을 때)
+    if (state.forcedCandidate && state.forcedCandidate !== lastCandidateRef.current) {
+        addLog('info', 
+            `📡 [CMD] SEIZE TARGET -> ${state.forcedCandidate}`, 
+            `📡 ORDER: Switching Master to ${state.forcedCandidate}`
+        );
+        lastCandidateRef.current = state.forcedCandidate;
+    }
+
+    // [C] 일반적인 홀더 변경 로그 (경쟁 가시화)
+    if (state.holder !== lastHolderRef.current) {
+        // Human-Operator가 아니고, RELEASING 상태가 아닐 때 실제 락 획득 로그 기록
+        if (state.holder && !state.holder.includes('Human') && state.holder !== 'RELEASING...') {
+            addLog('info', 
+                `🔒 [GRANTED] ${state.holder.toLowerCase()} (latency: ${state.latency}ms)`, 
+                `🔹 Active: ${state.holder}`
+            );
+        }
+        lastHolderRef.current = state.holder;
+    }
+
+    // [D] 오버라이드 감지
+    if (state.overrideSignal && !lastOverrideRef.current) {
+        addLog('critical', `🚨 !!! ADMIN_OVERRIDE_ACTIVE !!!`, `🚨 SYSTEM UNDER DIRECT CONTROL`);
+        lastOverrideRef.current = true;
+    } else if (!state.overrideSignal && lastOverrideRef.current) {
+        lastOverrideRef.current = false;
+    }
+
+  }, [state.holder, state.forcedCandidate, state.overrideSignal, state.latency]);
+
+  const saveLogs = () => {
+      const content = logs.map(l => `[${l.timestamp}] [${l.type.toUpperCase()}] ${viewMode === 'TECH' ? l.messageTech : l.messageStd}`).join('\n');
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `atc_logs_${new Date().toISOString().slice(0,10)}.txt`;
+      a.click();
   };
 
   useEffect(() => {
@@ -60,82 +111,127 @@ export const TerminalLog = () => {
       <Draggable nodeRef={nodeRef} handle=".handle" bounds="body">
             <div 
                 ref={nodeRef} 
-                className="fixed z-40 flex flex-col items-start font-mono min-w-0 overflow-visible"
-                style={{ right: sidebarWidth + 20, top: 'calc(100vh - 250px)' }}
+                className="fixed z-50 flex flex-col items-end font-mono" 
+                style={{ 
+                    left: `calc(100vw - ${sidebarWidth + 420}px)`, 
+                    top: 'calc(100vh - 250px)', 
+                }}
             >
-                <div className={clsx(
-                    "w-[400px] rounded-lg border shadow-xl backdrop-blur-md flex flex-col text-xs transition-none overflow-visible z-[10000]",
-                    isDark ? "bg-[#0d1117]/90 border-gray-800 text-gray-300" : "bg-slate-50/80 border-slate-200/40 text-slate-800",
-                    isCollapsed ? "h-10" : "h-[200px]"
-                )}>
-                    <div className={clsx("flex justify-between items-center p-2 border-b handle cursor-move h-10 shrink-0 rounded-t-lg overflow-visible",
+                <div 
+                    className={clsx(
+                        "rounded-lg border shadow-xl backdrop-blur-md flex flex-col text-xs overflow-hidden",
+                        isDark ? "bg-[#0d1117]/90 border-gray-800 text-gray-300" : "bg-slate-50/80 border-slate-200/40 text-slate-800",
+                        isCollapsed ? "!h-10 !min-h-[40px] !w-80 shadow-none transition-all duration-200" : "h-[220px] min-h-[150px] w-[400px] min-w-[280px] resize both"
+                    )}
+                    style={!isCollapsed ? { transition: 'none' } : {}}
+                >
+                    {/* Header */}
+                    <div className={clsx("flex justify-between items-center p-2 border-b handle cursor-move h-10 shrink-0 w-full",
                         isDark ? "bg-gray-800/20 border-gray-800" : "bg-white/40 border-slate-200/40"
                     )}>
-                        <span className="font-bold flex items-center gap-2 font-mono tracking-[0.2em] uppercase text-xs">
-                            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-                            <Tooltip content="System Event Log" position="bottom-right">
-                                TERMINAL_OUT
-                        </Tooltip>
-                        </span>
-                        <div className="flex items-center gap-2">
+                        <div className="relative group">
+                          <Tooltip content="Terminal Output Stream" position="bottom-right">
+                              <div className="flex items-center gap-2 truncate pr-2">
+                                  <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shrink-0"></span>
+                                  <span className="font-bold tracking-[0.1em] uppercase text-[10px] select-none">TERMINAL_OUT</span>
+                              </div>
+                          </Tooltip>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
                              {!isCollapsed && (
                                  <>
-                                    <Tooltip content="Toggle Auto-scroll" position="bottom">
-                                        <button 
-                                            onClick={() => setAutoScroll(!autoScroll)}
-                                            className={clsx("p-1 rounded transition-none", autoScroll ? "text-green-500" : "text-gray-500")}
-                                        >
-                                            <ArrowDownCircle size={12} />
+                                    <Tooltip content={`Mode: ${viewMode}`} position="bottom">
+                                        <div className="flex bg-black/20 rounded p-0.5">
+                                            {(['STD', 'TECH'] as const).map(m => (
+                                                <button 
+                                                    key={m}
+                                                    onClick={() => setViewMode(m)}
+                                                    className={clsx(
+                                                        "px-1.5 py-0.5 rounded text-[9px] font-bold transition-all",
+                                                        viewMode === m ? "bg-blue-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
+                                                    )}
+                                                >
+                                                    {m}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </Tooltip>
+
+                                    <Tooltip content="Save Logs" position="bottom">
+                                        <button onClick={saveLogs} className="p-1 rounded hover:bg-white/10 text-gray-500 hover:text-blue-400">
+                                            <Save size={13} />
                                         </button>
                                     </Tooltip>
-                                    <Tooltip content={isMuted ? "Unmute Logs" : "Mute Logs"} position="bottom">
-                                        <button 
-                                            onClick={() => setIsMuted(!isMuted)}
-                                            className={clsx("p-1 rounded transition-none", isMuted ? "text-red-500" : "text-gray-500")}
-                                        >
-                                            {isMuted ? <VolumeX size={12} /> : <Volume2 size={12} />}
+
+                                    <Tooltip content={autoScroll ? "Disable Scroll" : "Enable Scroll"} position="bottom">
+                                        <button onClick={() => setAutoScroll(!autoScroll)} className={clsx("p-1 rounded", autoScroll ? "text-green-500 hover:bg-green-500/10" : "text-gray-500 hover:bg-white/10")}>
+                                            <ArrowDownCircle size={13} />
                                         </button>
                                     </Tooltip>
-                                    <div className="w-px h-3 bg-white/10 mx-1" />
-                                    
-                                    {['ALL', 'CRITICAL', 'WARN', 'INFO'].map(f => (
+
+                                    <Tooltip content={isAdminMuted ? "Unmute" : "Mute"} position="bottom-left">
                                         <button 
-                                            key={f}
-                                            onClick={() => setFilter(f)}
-                                            className={clsx("px-1.5 py-0.5 rounded text-[9px] transition-none", filter === f ? "bg-blue-500 text-white" : "hover:bg-white/10")}
+                                        onClick={toggleAdminMute} 
+                                        className="p-1 rounded text-gray-500 hover:bg-white/10"
                                         >
-                                            {f}
+                                            {isAdminMuted ? <VolumeX size={13} className="text-red-500" /> : <Volume2 size={13} />}
                                         </button>
-                                    ))}
+                                    </Tooltip>
                                  </>
                              )}
-                             
-                             <button 
-                                 onClick={() => setIsCollapsed(!isCollapsed)}
-                                 className={clsx("p-1 rounded hover:bg-white/10 transition-none", isCollapsed && "rotate-180")}
-                             >
-                                 <ChevronDown size={14} />
+                             <button onClick={() => setIsCollapsed(!isCollapsed)} className={clsx("p-1 rounded hover:bg-white/10 transition-transform", isCollapsed && "rotate-180")}>
+                                <ChevronDown size={14} />
                              </button>
                         </div>
                     </div>
 
                     {!isCollapsed && (
-                        <div ref={scrollRef} className="flex-1 overflow-y-auto p-2 space-y-1 font-mono rounded-b-lg">
-                            {filteredLogs.map(log => (
-                                <div key={log.id} className="flex gap-2 leading-tight">
-                                    <span className="opacity-50 select-none">[{log.timestamp}]</span>
-                                    <span className={clsx(
-                                        "break-all whitespace-pre-wrap font-mono text-[11px]",
-                                        log.type === 'critical' ? 'text-red-500 font-bold animate-pulse' : 
-                                        log.type === 'warn' ? 'text-yellow-500' :
-                                        'opacity-90'
-                                    )}>
-                                        {log.type === 'critical' && '>> '}
-                                        {log.message}
-                                    </span>
-                                </div>
-                            ))}
-                            <div ref={endRef} />
+                        <div className="flex flex-1 overflow-hidden">
+                            {/* 왼쪽 세로 필터 버튼 바 */}
+                            <div className={clsx("w-8 border-r flex flex-col items-center py-2 gap-2 shrink-0", 
+                                isDark ? "bg-black/20 border-gray-800" : "bg-white/10 border-slate-200")}>
+                                {['ALL', 'INFO', 'WARN', 'CRIT'].map(f => (
+                                    <Tooltip key={f} content={`${f} Logs`} position="right">
+                                        <button 
+                                            onClick={() => setFilter(f === 'CRIT' ? 'CRITICAL' : f)} 
+                                            className={clsx("text-[9px] font-bold w-6 h-6 flex items-center justify-center rounded transition-colors", 
+                                                (filter === f || (f === 'CRIT' && filter === 'CRITICAL')) 
+                                                ? "bg-blue-500 text-white" 
+                                                : "text-gray-500 hover:bg-white/5"
+                                            )}
+                                        >
+                                            {f[0]}
+                                        </button>
+                                    </Tooltip>
+                                ))}
+                            </div>
+
+                            {/* 로그 출력 영역 */}
+                            <div ref={scrollRef} className={clsx("flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 font-mono text-[11px]", isDark ? "bg-black/10" : "bg-white/20")}>
+                                {filteredLogs.map(log => {
+                                    const msg = viewMode === 'TECH' ? log.messageTech : log.messageStd;
+                                    const isProcessingLog = msg.includes('📡') || msg.includes('⚙️');
+                                    const isSuccessLog = msg.includes('⚡');
+                                    
+                                    return (
+                                        <div key={log.id} className={clsx("flex gap-2 leading-tight border-b last:border-0 pb-1", isDark ? "border-white/5" : "border-black/5")}>
+                                            <span className="select-none text-[9px] shrink-0 opacity-40">[{log.timestamp}]</span>
+                                            <span className={clsx(
+                                                "break-all whitespace-pre-wrap font-medium",
+                                                log.type === 'critical' ? 'text-red-600 font-bold animate-pulse' : 
+                                                isSuccessLog ? (isDark ? 'text-[#BC6FF1] font-extrabold' : 'text-[#8B5CF6] font-black underline decoration-[#8B5CF6]/20 underline-offset-2') :
+                                                isProcessingLog ? (isDark ? 'text-[#BC6FF1]/70 font-bold' : 'text-[#A78BFA] font-bold') :
+                                                log.type === 'warn' ? (isDark ? 'text-amber-500' : 'text-amber-600') :
+                                                viewMode === 'STD' && log.type === 'info' ? 'opacity-60 font-normal' : (isDark ? 'text-blue-300' : 'text-blue-700')
+                                            )}>
+                                                {msg}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                                <div ref={endRef} />
+                            </div>
                         </div>
                     )}
                 </div>
