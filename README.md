@@ -46,13 +46,13 @@
 ![Demo Scenario 1](./demo_1.gif)
 
 1.  **Identify**: Locate the current Lock Holder (Green) in the **Radar** or **Queue Display**.
-2.  **Select**: Click a waiting agent (e.g., `agent-002`) to open the Tactical Menu.
+2.  **Select**: Click a waiting agent (e.g., `Agent-2`) to open the Tactical Menu.
 3.  **Execute**: Click the **SEIZE (Purple Zap)** button.
 4.  **Observe**:
     - The target agent pulses **Purple** in the Radar.
     - The **Queue Display** shows the target jumping to "Seizing" status.
-    - The Terminal Log reports: `📡 [CMD] SEIZE TARGET -> agent-002`.
-    - Within seconds, `agent-002` captures the lock.
+    - The Terminal Log reports: `📡 [CMD] SEIZE TARGET -> Agent-2`.
+    - Within seconds, `Agent-2` captures the lock.
 
 ### Scenario 2: VIP Fast-Track (Priority Queueing)
 > **Objective**: Grant VIP status to an agent to bypass the standard waitlist.
@@ -84,7 +84,7 @@
 
 ---
 
-## 🛠 Architecture
+## 🏗️ Architecture
 
 ```mermaid
 graph TD
@@ -119,56 +119,37 @@ graph TD
 - pnpm (recommended)
 
 ### 🚀 Quick Start (Recommended)
-The fastest way to launch the full stack (Frontend + Backend + Hazelcast Cluster) is via Docker Compose.
+The fastest way to launch the backend infrastructure (API + Hazelcast Cluster) is via Docker Compose.
 
 ```bash
 # 1. Clone the repository
-git clone <repository-url>
+git clone [https://github.com/209512/atc.git](https://github.com/209512/atc.git)
 cd atc
 
-# 2. Start the entire system
+# 2. Start Backend & Hazelcast
 docker-compose up --build
 ```
-- **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:3000
-- **Hazelcast Management Center**: http://localhost:8080
+- **Hazelcast Server**: http://localhost:5701 (Cluster: dev)
+> **Note**: After starting the backend via Docker, please run the Frontend locally for the best development experience (see below).
 
 ---
 
-### 💻 Local Development (Manual Setup)
+### 💻 Local Development (Frontend)
 
-If you prefer to run services individually for development:
+Since the backend is running in Docker, you just need to launch the client.
 
-#### 1. Start Infrastructure
 ```bash
-# Start only the Hazelcast Cluster
-docker-compose up -d hazelcast
-```
-
-#### 2. Install Dependencies
-```bash
-# Install root and workspace dependencies
-pnpm install
-```
-
-#### 3. Run Services
-**Terminal 1 (Backend):**
-```bash
-cd packages/backend
-pnpm run dev
-# Server starts on http://localhost:3000
-```
-
-**Terminal 2 (Frontend):**
-```bash
+# In a new terminal
 cd packages/frontend
+pnpm install
 pnpm run dev
-# Client accessible at http://localhost:5173
 ```
+- **Frontend**: http://localhost:5173
 
 ---
 
-## � Technical Stack
+## 🛠️ Technical Stack
 
 | Component | Technology | Description |
 |-----------|------------|-------------|
