@@ -11,6 +11,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.28.1",
   "dependencies": {
+    "@hello-pangea/dnd": "^18.0.1",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@react-three/postprocessing": "^3.0.4"
   }

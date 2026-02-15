@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  # 1. Hazelcast 서버 (Cloud 대용)
+  hazelcast:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5701:5701"
+    environment:
+      - HZ_CLUSTER_NAME=dev
+      - JAVA_OPTS=-Dhazelcast.cluster.name=atc -Dhazelcast.cp.endpoints.count=1
+
+  # 2. ATC 백엔드
+  atc-backend:
+    build:
+      context: ./packages/backend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - HZ_ADDRESS=hazelcast:5701
+      - HZ_CLUSTER_NAME=dev
+      - USE_LOCAL_HZ=true
+    env_file:
+      - ./packages/backend/.env
+    depends_on:
+      - hazelcast
