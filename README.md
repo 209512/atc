@@ -1,93 +1,158 @@
-# ATC (AI Traffic Control) System
+# Agent Traffic Control (ATC) System
 
-![Status](https://img.shields.io/badge/Status-Active-success?style=for-the-badge)
-![License](https://img.shields.io/badge/License-ISC-blue?style=for-the-badge)
-![Stack](https://img.shields.io/badge/Stack-React%20|%20Node.js%20|%20Hazelcast-orange?style=for-the-badge)
+![React](https://img.shields.io/badge/React-18-blue?logo=react&style=flat-square)
+![Node.js](https://img.shields.io/badge/Node.js-18-green?logo=node.js&style=flat-square)
+![Hazelcast](https://img.shields.io/badge/Hazelcast-IMDG-orange?style=flat-square)
+![Three.js](https://img.shields.io/badge/Three.js-R3F-black?logo=three.js&style=flat-square)
+![Vite](https://img.shields.io/badge/Vite-Bundler-purple?logo=vite&style=flat-square)
+![TailwindCSS](https://img.shields.io/badge/Tailwind-CSS-cyan?logo=tailwindcss&style=flat-square)
 
-The **ATC System** is a distributed AI agent management platform designed to visualize and control concurrent agent activities in real-time. It simulates a high-stakes "Air Traffic Control" environment where AI agents compete for resources (locks) to perform tasks. 
-
-Beyond simple monitoring, ATC empowers administrators with **God-mode controls**: granting priorities, seizing locks by force, and executing emergency overrides.
-
----
-
-## 🎬 Demo Scenarios (Planned)
-
-Here are the recommended scenarios to showcase the system's capabilities in action.
-
-| Scenario | Duration | Layout | Sequence |
-| :--- | :--- | :--- | :--- |
-| **1. The Priority Override** | 8s | **Split View**<br>(Radar 50% / List 50%) | 1) Agent list shows normal competition.<br>2) Admin clicks "Star" icon on `Agent-3`.<br>3) `Agent-3` turns Gold in Radar and immediately acquires the lock.<br>4) Other agents back off instantly. |
-| **2. Administrative Seizure** | 6s | **Focus View**<br>(Tactical Panel Center) | 1) `Agent-1` holds the lock (Green).<br>2) Admin clicks "Zap" (Seize) on `Agent-5`.<br>3) `Agent-1` is forcibly detached (Red flash).<br>4) `Agent-5` acquires the lock immediately. |
-| **3. The Great Lock War** | 10s | **Full Dashboard**<br>(Sidebar + Radar + Log) | 1) Sidebar: Increase Intensity to 10.<br>2) Radar: Swarm of agents spawns.<br>3) Terminal: Rapid "Collision" and "Retry" logs scrolling.<br>4) Visual chaos with particle effects. |
-| **4. Ghost Protocol** | 5s | **Compact Mode**<br>(Sidebar Only) | 1) Sidebar is active, main view hidden.<br>2) Admin triggers "Global Stop".<br>3) All status indicators turn Red/Paused.<br>4) Admin renames an agent; change reflects instantly (Optimistic UI). |
+**Agent Traffic Control (ATC)** is a high-performance, distributed visualization system designed to monitor and manage autonomous agent resource contention in real-time. Built with a **Cyberpunk-inspired UI**, it provides "God-mode" controls to oversee locking mechanisms, priority queues, and emergency overrides across a distributed Hazelcast cluster.
 
 ---
 
 ## 🚀 Key Features
 
-### 📡 Real-time Visualization & Control
-- **3D Radar Interface:** Interactive **React Three Fiber** visualization showing agent positions, priority status (Gold), and lock holding (Green/Red).
-- **Tactical Command:** Floating panel to manage agents.
-    - **Grant VIP:** Give specific agents priority access to locks.
-    - **Seize Lock:** Forcefully transfer a lock from one agent to another.
-    - **Terminate:** Remove agents with a single click (Trash icon).
-- **Detachable View:** Radar can be detached to a full-screen "Main View" or kept as a widget.
+### 1. 3D Tactical Radar (Three.js)
+- **Real-time Visualization**: Agents are rendered as autonomous drones orbiting a central resource hub.
+- **Visual Feedback**:
+    - **Green Beam**: Active Lock Holder (Processing).
+    - **Purple Pulse**: Force Seize / Hostile Takeover in progress.
+    - **Red Pulse**: Paused / Suspended agents.
+- **Interactive Control**: Click any drone to inspect status, grant VIP access, or terminate.
 
-### ⚡ Ultra-Compact Monitoring
+### 2. Distributed Locking & Concurrency
+- **Hazelcast CP Subsystem**: Guarantees strong consistency for distributed locks (FencedLock).
+- **Priority Queueing**: Dynamic scheduling where VIP agents (Star badge) bypass standard waiting lists.
+- **Force Transfer (Seize)**: Administrative capability to forcibly rip the lock from the current holder and assign it to a target candidate.
 
-| Feature Focus | Preview |
-| :--- | :--- |
-| **Seamless Layout Adaptation**<br><br>The main viewport collapses to 0px width without breaking layout integrity. Administrators can shrink the browser to focus solely on the **Sidebar Control Panel**—perfect for keeping an eye on system metrics (`Active Threads`, `Congestion`) while multitasking. | <img src="sidebar_takeover.gif" width="260px" alt="Sidebar Mode" /> |
+### 3. Live System Monitoring
+- **Sector Queue Panel**: Draggable HUD showing the live state of the "Priority Stack" vs "Standard Queue".
+- **Terminal Logs**: Real-time event streaming via SSE (Server-Sent Events) with "Tech" and "Standard" view modes.
+- **Audio Engine**: Custom `MasterGain` architecture with strict user-interaction policies (no ghost sounds).
 
-### 🎮 Human-in-the-Loop Authority
-- **Emergency Takeover:** Instant administrative lock override (`EMERGENCY TAKEOVER`) to halt all agent activity.
-- **Priority Management:** Dynamically assign "Star" status to agents, allowing them to bypass queues.
-- **Optimistic UI:** Rename agents or toggle states with zero latency; the interface updates instantly while syncing with the server in the background.
-
-### 🛠 Modern Engineering
-- **Terminal Log:** Collapsible system log with filtering (ALL, CRITICAL, WARN, INFO).
-- **Themes:** Toggle between **Cyberpunk Dark Mode** (Deep Space) and **Clean Light Mode** (Corporate).
-- **SoundFX:** Audio feedback for system events (Lock Acquired, Priority Alarm, Override).
+### 4. Administrative "God-Mode"
+- **Emergency Override**: Instantly suspends all autonomous agents and grants the lock to the "Human-Operator".
+- **Global Stop**: One-click system freeze for immediate debugging or safety.
+- **Traffic Intensity**: Dynamic scaling of agent pool size (0-10) via slider controls.
 
 ---
 
-## 🏗 Architecture
+## 🎬 Demo Scenarios
 
-### `packages/backend` (Node.js + Express)
-- **Core Service (`atc.service.js`):** Manages simulation loop, priority queues, and state synchronization.
-- **Hazelcast Integration:** Uses distributed locks with fencing tokens for strong consistency.
-- **API:** REST endpoints for commands (Seize, Priority) and SSE for real-time state streaming.
+### Scenario 1: The Hostile Takeover (Force Seize)
+> **Objective**: Forcefully transfer control from a deadlock to a high-priority agent.
 
-### `packages/frontend` (React + Vite + Tailwind)
-- **State Management:** Custom `useATC` hook with optimistic updates and race-condition handling (Ghosting protection).
-- **Visuals:** `Three.js` for Radar, `Lucide React` for iconography.
+![Demo Scenario 1](./demo_1.gif)
+
+1.  **Identify**: Locate the current Lock Holder (Green) in the **Radar** or **Queue Display**.
+2.  **Select**: Click a waiting agent (e.g., `agent-002`) to open the Tactical Menu.
+3.  **Execute**: Click the **SEIZE (Purple Zap)** button.
+4.  **Observe**:
+    - The target agent pulses **Purple** in the Radar.
+    - The **Queue Display** shows the target jumping to "Seizing" status.
+    - The Terminal Log reports: `📡 [CMD] SEIZE TARGET -> agent-002`.
+    - Within seconds, `agent-002` captures the lock.
+
+### Scenario 2: VIP Fast-Track (Priority Queueing)
+> **Objective**: Grant VIP status to an agent to bypass the standard waitlist.
+
+![Demo Scenario 2](./demo_2.gif)
+
+1.  **Monitor**: Observe the "Standard Queue" in the **Queue Display**.
+2.  **Grant**: Click the **Star (VIP)** icon on an agent at the bottom of the list.
+3.  **Result**:
+    - The agent immediately moves to the **"Priority Stack"** section.
+    - It bypasses all standard agents for the next lock acquisition cycle.
+    - Visual confirmation: Yellow Star badge appears on the drone and in the sidebar.
+
+### Scenario 3: Emergency Protocol (System Override)
+> **Objective**: Immediate manual intervention during a simulated failure.
+
+![Demo Scenario 3](./demo_3.gif)
+
+1.  **Trigger**: Click the **Emergency Override** button in the Sidebar Control Panel.
+2.  **Effect**:
+    - **Audio**: System-wide alert sound plays.
+    - **State**: All agents are forced into "Waiting" or "Paused".
+    - **Lock**: The `Human-Operator` acquires the lock indefinitely.
+    - **Logs**: `🚨 !!! ADMIN_OVERRIDE_ACTIVE !!!` appears in Critical Red.
+
+> **Technical Note on Distributed Consistency**: 
+> In this demo, you may observe logs of an agent acquiring the lock *after* the Override command. This is expected behavior in a distributed system (CAP Theorem). The `Human Override` command updates the central Policy Manager instantly, but agents in the middle of an atomic `FencedLock.tryLock()` operation must complete their transaction cycle to maintain data integrity before the new policy takes effect in the next tick. This demonstrates the system's commitment to **Strong Consistency** over immediate eventual availability.
+
+
+---
+
+## 🛠 Architecture
+
+```mermaid
+graph TD
+    subgraph Frontend [React + Three.js Client]
+        UI[Sidebar & Controls] -->|REST API| API
+        Radar[3D Radar] -->|Visualizes| Store
+        Queue[Queue Display] -->|Visualizes| Store
+        Store[Context / Hooks] <-->|"SSE Stream"| API
+    end
+
+    subgraph Backend [Node.js + Express]
+        API[ATC Service] -->|Manage| AM[Agent Manager]
+        API -->|Control| LD[Lock Director]
+        AM -->|Orchestrate| Agent[Autonomous Agents]
+    end
+
+    subgraph Infrastructure [Hazelcast Cluster]
+        Agent <-->|"Acquire/Release"| CP["CP Subsystem (FencedLock)"]
+        API <-->|Monitor| Maps[Distributed Maps]
+    end
+```
 
 ---
 
 ## 📦 Installation & Setup
 
 ### Prerequisites
-- Node.js (v18+)
-- Hazelcast Cloud Cluster (or local instance)
+- Node.js v18+
+- npm or pnpm
 
-### 1. Backend Setup
+### 1. Clone & Install
+```bash
+git clone <repository-url>
+cd atc
+
+# Install dependencies for both frontend and backend
+npm install
+cd packages/backend && npm install
+cd ../frontend && npm install
+```
+
+### 2. Start the System
+You need to run the Backend and Frontend concurrently.
+
+**Terminal 1 (Backend):**
 ```bash
 cd packages/backend
-npm install
-# Configure .env for Hazelcast
-node index.js
+npm run dev
+# Server starts on http://localhost:3000
+# Hazelcast instance initializes automatically
 ```
 
-### 2. Frontend Setup
+**Terminal 2 (Frontend):**
 ```bash
 cd packages/frontend
-npm install
 npm run dev
+# Client accessible at http://localhost:5173
 ```
 
-## 🛡️ Security & Constraints
-- **Hard Limits:** Agent scaling is capped at 10 to prevent resource exhaustion.
-- **Fencing Tokens:** Ensures old lock holders cannot commit changes after losing access.
+---
 
-## 📝 License
-ISC
+## � Technical Stack
+
+| Component | Technology | Description |
+|-----------|------------|-------------|
+| **Frontend** | React 18, Vite | Component-based UI architecture |
+| **Visualization** | Three.js, R3F | High-performance 3D rendering |
+| **Styling** | TailwindCSS | Utility-first responsive design |
+| **Backend** | Node.js, Express | Event-driven REST API |
+| **Persistence** | Hazelcast IMDG | In-memory distributed data grid |
+| **Streaming** | Server-Sent Events | Unidirectional real-time state updates |
