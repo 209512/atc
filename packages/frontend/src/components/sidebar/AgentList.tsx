@@ -1,36 +1,28 @@
-import React, { useMemo } from 'react';
+// src/components/sidebar/AgentList.tsx
+import React from 'react';
 import { Star, Shield, Play, Pause } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import clsx from 'clsx';
-import { useATC } from '../../hooks/useATC';
-import { useTacticalActions } from '../../hooks/useTacticalActions';
-import { AgentCard } from './AgentCard';
-import { Agent } from '../../contexts/atcTypes';
-import { Tooltip } from '../Tooltip';
+import { useATC } from '@/hooks/system/useATC';
+import { useUI } from '@/hooks/system/useUI';
+import { useTacticalActions } from '@/hooks/agent/useTacticalActions';
+import { useCategorizedAgents } from '@/hooks/agent/useCategorizedAgents';
+import { AgentCard } from '@/components/sidebar/AgentCard';
+import { Agent } from '@/contexts/atcTypes';
+import { Tooltip } from '@/components/common/Tooltip';
 
-export const SidebarAgentList = () => {
-    const { state, agents, selectedAgentId, setSelectedAgentId, isDark, updatePriorityOrder } = useATC();
+export const AgentList = () => {
+    const { state, updatePriorityOrder } = useATC();
+    const { selectedAgentId, setSelectedAgentId, isDark } = useUI();
     const { 
         onTogglePause, onTransferLock, togglePriority, terminateAgent,
         renamingId, newName, setNewName, handleStartRename, handleCancelRename, handleConfirmRename,
         toggleGlobalStop 
     } = useTacticalActions();
 
-    const priorityIds = useMemo((): string[] => {
-        const ids: string[] = state.priorityAgents || [];
-        return ids.filter((id: string) => agents.some((a: Agent) => a.id === id));
-    }, [state.priorityAgents, agents]);
+    const { priorityAgents, normalAgents, priorityIds } = useCategorizedAgents();
 
-    const normalIds = useMemo((): string[] => {
-        return agents
-            .filter((a: Agent) => !priorityIds.includes(a.id))
-            .map((a: Agent) => a.id);
-    }, [agents, priorityIds]);
-
-    const renderAgentItem = (agentId: string, isPrioritySection: boolean) => {
-        const agent = agents.find((a: Agent) => a.id === agentId);
-        if (!agent) return null;
-
+    const renderAgentItem = (agent: Agent, isPrioritySection: boolean) => {
         return (
             <AgentCard 
                 key={agent.id}
@@ -57,20 +49,20 @@ export const SidebarAgentList = () => {
     return (
         <div className="space-y-4 select-none pb-40 px-1">
             <div className="flex justify-end mb-6 px-1">
-                <Tooltip content={state.globalStop ? "Resume All" : "Halt All"} position="bottom-left">
+                <Tooltip content={state?.globalStop ? "Resume All" : "Halt All"} position="bottom-left">
                     <button 
                         onClick={(e) => { e.stopPropagation(); toggleGlobalStop(); }}
                         className={clsx(
                             "px-4 py-1.5 rounded-full text-[10px] font-black transition-all flex items-center gap-1.5 border shadow-md",
-                            state.globalStop 
+                            state?.globalStop 
                                 ? "bg-red-500 text-white border-red-600 animate-pulse" 
                                 : (isDark 
                                     ? "bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700" 
                                     : "bg-white border-slate-400 text-slate-700 hover:bg-slate-50")
                         )}
                     >
-                        {state.globalStop ? <Play size={10} fill="currentColor"/> : <Pause size={10} fill="currentColor"/>}
-                        {state.globalStop ? "RESUME SYSTEM" : "HALT SYSTEM"}
+                        {state?.globalStop ? <Play size={10} fill="currentColor"/> : <Pause size={10} fill="currentColor"/>}
+                        {state?.globalStop ? "RESUME SYSTEM" : "HALT SYSTEM"}
                     </button>
                 </Tooltip>
             </div>
@@ -84,7 +76,7 @@ export const SidebarAgentList = () => {
                         </label>
                     </Tooltip>
                     <Reorder.Group axis="y" values={priorityIds} onReorder={updatePriorityOrder} className="space-y-1">
-                        {priorityIds.map((id: string) => renderAgentItem(id, true))}
+                        {priorityAgents.map((agent: Agent) => renderAgentItem(agent, true))}
                     </Reorder.Group>
                 </section>
 
@@ -95,8 +87,14 @@ export const SidebarAgentList = () => {
                             <Shield size={10}/> Standard Sector
                         </label>
                     </Tooltip>
-                    <Reorder.Group axis="y" values={normalIds} onReorder={() => {}} className="space-y-1">
-                        {normalIds.map((id: string) => renderAgentItem(id, false))}
+
+                    <Reorder.Group 
+                        axis="y" 
+                        values={normalAgents.map((a: Agent) => a.id)} 
+                        onReorder={() => {}} 
+                        className="space-y-1"
+                    >
+                        {normalAgents.map((agent: Agent) => renderAgentItem(agent, false))}
                     </Reorder.Group>
                 </section>
             </div>

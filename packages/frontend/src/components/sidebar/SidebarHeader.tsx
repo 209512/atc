@@ -1,11 +1,14 @@
+// src/components/sidebar/SidebarHeader.tsx
 import React from 'react';
 import clsx from 'clsx';
 import { ShieldAlert, Activity, Settings } from 'lucide-react';
-import { Tooltip } from '../Tooltip';
-import { useATC } from '../../hooks/useATC';
+import { Tooltip } from '@/components/common/Tooltip';
+import { useATC } from '@/hooks/system/useATC';
+import { useUI } from '@/hooks/system/useUI';
 
 export const SidebarHeader = ({ onOpenSettings }: { onOpenSettings: () => void }) => {
-    const { state, isDark, setIsDark } = useATC();
+    const { state } = useATC();
+    const { isDark, setIsDark } = useUI();
     const isHuman = state.holder && state.holder.includes('Human');
 
     return (
@@ -38,7 +41,7 @@ export const SidebarHeader = ({ onOpenSettings }: { onOpenSettings: () => void }
                     </button>
                 </Tooltip>
                 {/* 설정 버튼 툴팁 */}
-                <Tooltip content="System Settings" position="bottom-left">
+                <Tooltip content="System Settings" position="bottom">
                     <button onClick={onOpenSettings} className="p-2 rounded-md hover:bg-blue-500/20">
                         <Settings size={16} />
                     </button>

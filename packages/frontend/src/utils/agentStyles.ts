@@ -1,15 +1,27 @@
+// src/utils/agentStyles.ts
 import clsx from 'clsx';
 
-export const getAgentCardStyle = (
-    isForced: boolean, 
-    isLocked: boolean, 
-    isPaused: boolean, 
-    isPriority: boolean, 
-    isSelected: boolean, 
-    isDark: boolean, 
-    overrideSignal?: boolean,
-    globalStop?: boolean 
-) => {
+interface AgentCardStyleProps {
+    isForced: boolean;
+    isLocked: boolean;
+    isPaused: boolean;
+    isPriority: boolean;
+    isSelected: boolean;
+    isDark: boolean;
+    overrideSignal?: boolean;
+    globalStop?: boolean;
+}
+
+export const getAgentCardStyle = ({
+    isForced,
+    isLocked,
+    isPaused,
+    isPriority,
+    isSelected,
+    isDark,
+    overrideSignal,
+    globalStop
+}: AgentCardStyleProps) => {
     const base = "rounded border transition-all relative overflow-hidden group";
     const effectivelyPaused = isPaused || globalStop;
 
@@ -31,8 +43,7 @@ export const getAgentCardStyle = (
         return clsx(base, isDark ? "bg-emerald-500/15 border-emerald-500" : "bg-emerald-50 border-emerald-400 shadow-sm");
     }
 
-    // 4. 일시정지 (식별력 강화 버전)
-    // 화이트모드: bg-zinc-200(더 어두운 회색)으로 변경하고 테두리를 zinc-300으로 명확하게 처리
+    // 4. 일시정지
     if (effectivelyPaused) {
         return clsx(
             base, 
@@ -43,8 +54,7 @@ export const getAgentCardStyle = (
         );
     }
     
-    // 5. 우선순위 (레이더 드론 Amber 테마 적용)
-    // 화이트모드: 노란색(yellow) 대신 진한 앰버(amber) 배경과 테두리를 사용하여 시인성 확보
+    // 5. 우선순위
     if (isPriority) {
         return clsx(
             base, 
@@ -63,12 +73,19 @@ export const getAgentCardStyle = (
     return clsx(base, isDark ? "bg-gray-800/30 border-gray-800" : "bg-white border-slate-200");
 };
 
-export const getAgentTextStyle = (
-    isForced: boolean,
-    isLocked: boolean,
-    isDark: boolean,
-    overrideSignal?: boolean
-) => {
+interface AgentTextStyleProps {
+    isForced: boolean;
+    isLocked: boolean;
+    isDark: boolean;
+    overrideSignal?: boolean;
+}
+
+export const getAgentTextStyle = ({
+    isForced,
+    isLocked,
+    isDark,
+    overrideSignal
+}: AgentTextStyleProps) => {
     return clsx(
         "font-mono text-xs font-bold truncate transition-colors",
         overrideSignal ? "text-red-400" : 

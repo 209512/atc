@@ -1,18 +1,18 @@
-import React, { useState } from 'react';
-import { X, Save, Key, Cpu, MessageSquare, Settings, ChevronDown, Boxes } from 'lucide-react';
+// src/components/sidebar/AgentSettings.tsx
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Save, Key, Cpu, MessageSquare, Settings, ChevronDown } from 'lucide-react';
 import clsx from 'clsx';
-import { Agent } from '../../contexts/atcTypes';
-import { useAgentSettings } from '../../hooks/useAgentSettings';
+import { useAgentSettings } from '@/hooks/agent/useAgentSettings';
+import { Agent } from '@/contexts/atcTypes';
 
 interface AgentSettingsProps {
     onClose: () => void;
-    agents?: Agent[];
 }
 
 export const AgentSettings: React.FC<AgentSettingsProps> = ({ onClose }) => {
-    // 각 드롭다운의 열림 상태 관리
     const [isAgentOpen, setIsAgentOpen] = useState(false);
     const [isProviderOpen, setIsProviderOpen] = useState(false);
+    const modalRef = useRef<HTMLDivElement>(null);
 
     const {
         agents, isDark, areTooltipsEnabled, setAreTooltipsEnabled,
@@ -20,6 +20,12 @@ export const AgentSettings: React.FC<AgentSettingsProps> = ({ onClose }) => {
         apiKey, setApiKey, model, setModel, systemPrompt, setSystemPrompt,
         isLoading, handleSubmit
     } = useAgentSettings(onClose);
+
+    useEffect(() => {
+        const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [onClose]);
 
     const providers = [
         { id: 'mock', name: 'Mock (Simulation)' },
@@ -29,189 +35,116 @@ export const AgentSettings: React.FC<AgentSettingsProps> = ({ onClose }) => {
     ];
 
     return (
-        <div 
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm"
-            onClick={onClose}
-        >
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in duration-200" onClick={onClose}>
             <div 
+                ref={modalRef}
                 className={clsx(
-                    "w-full max-w-md p-6 rounded-xl shadow-2xl border relative backdrop-blur-md transition-all",
-                    isDark ? "bg-[#0d1117]/95 border-gray-700 text-gray-300" : "bg-white/95 border-slate-200 text-slate-800"
+                    "w-full max-w-md p-6 rounded-xl shadow-2xl border relative transition-all animate-in zoom-in-95 duration-200",
+                    isDark ? "bg-[#0d1117] border-gray-700 text-gray-300" : "bg-white border-slate-200 text-slate-800"
                 )}
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* Header */}
-                <div className={clsx("flex justify-between items-center border-b pb-3 mb-5", 
-                    isDark ? "border-gray-500/20" : "border-slate-200"
-                )}>
-                    <h2 className="flex items-center gap-2 font-mono font-bold tracking-[0.2em] uppercase text-sm">
-                        <Settings size={16} className="text-blue-500" />
-                        Agent Configuration
+                <div className={clsx("flex justify-between items-center border-b pb-3 mb-5", isDark ? "border-white/10" : "border-slate-200")}>
+                    <h2 className="flex items-center gap-2 font-mono font-bold tracking-widest uppercase text-xs">
+                        <Settings size={14} className="text-blue-500" />
+                        System_Config
                     </h2>
-                    <button onClick={onClose} className={clsx("transition-colors", isDark ? "hover:text-red-400" : "hover:text-red-600")}>
+                    <button onClick={onClose} className="opacity-50 hover:opacity-100 transition-opacity p-1">
                         <X size={18} />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    {/* Interface Settings */}
-                    <div className="p-3 rounded-lg border border-dashed border-gray-500/30 bg-gray-500/5">
-                        <label className="flex items-center justify-between cursor-pointer">
-                            <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                                <MessageSquare size={14} />
-                                Enable Tooltips
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className={clsx("p-3 rounded-lg border", isDark ? "bg-white/5 border-white/10" : "bg-slate-50 border-slate-200")}>
+                        <label className="flex items-center justify-between cursor-pointer group">
+                            <span className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 opacity-70 group-hover:opacity-100">
+                                <MessageSquare size={12} />
+                                Interactive Tooltips
                             </span>
-                            <div className="relative inline-block w-8 h-4 align-middle select-none transition duration-200 ease-in">
+                            <div className="relative inline-block w-8 h-4 select-none">
                                 <input 
                                     type="checkbox" 
                                     checked={areTooltipsEnabled}
                                     onChange={(e) => setAreTooltipsEnabled(e.target.checked)}
-                                    className="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-4 appearance-none cursor-pointer checked:right-0 right-4"
+                                    className="sr-only"
                                 />
-                                <label className={clsx("toggle-label block overflow-hidden h-4 rounded-full cursor-pointer", areTooltipsEnabled ? "bg-blue-500" : "bg-gray-400")}></label>
+                                <div className={clsx(
+                                    "block w-8 h-4 rounded-full transition-colors",
+                                    areTooltipsEnabled ? "bg-blue-600" : "bg-gray-600"
+                                )}></div>
+                                <div className={clsx(
+                                    "absolute left-0 top-0 bg-white w-4 h-4 rounded-full transition-transform duration-200 border border-gray-400",
+                                    areTooltipsEnabled ? "translate-x-4" : "translate-x-0"
+                                )}></div>
                             </div>
                         </label>
                     </div>
 
-                    {/* Agent Selector (Custom Dropdown) */}
-                    <div className="space-y-1 relative">
-                        <label className="block text-xs font-bold uppercase opacity-50 tracking-wider">Target Agent</label>
-                        <button 
-                            type="button"
-                            onClick={() => { setIsAgentOpen(!isAgentOpen); setIsProviderOpen(false); }}
-                            className={clsx(
-                                "w-full pl-9 pr-4 p-2 rounded border text-sm flex items-center justify-between transition-all outline-none focus:ring-2 focus:ring-blue-500",
-                                isDark ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-slate-300 text-slate-900"
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1 relative">
+                            <label className="text-[9px] font-bold uppercase opacity-50">Target Agent</label>
+                            <button type="button" onClick={() => { setIsAgentOpen(!isAgentOpen); setIsProviderOpen(false); }}
+                                className={clsx("w-full h-9 px-3 rounded border text-[11px] flex items-center justify-between font-mono", isDark ? "bg-black border-gray-700" : "bg-white border-slate-300")}>
+                                <span className="truncate">{selectedAgent || "Select"}</span>
+                                <ChevronDown size={12} className={clsx("transition-transform", isAgentOpen && "rotate-180")} />
+                            </button>
+                            {isAgentOpen && (
+                                <div className={clsx("absolute z-[120] w-full mt-1 border rounded shadow-2xl max-h-40 overflow-y-auto font-mono text-[11px]", isDark ? "bg-gray-900 border-gray-700" : "bg-white border-slate-200")}>
+                                    {agents.map((a: Agent) => (
+                                        <div key={a.id} onClick={() => { setSelectedAgent(a.id); setIsAgentOpen(false); }}
+                                            className="p-2 hover:bg-blue-600 hover:text-white cursor-pointer transition-colors border-b border-white/5 last:border-0">
+                                            {a.displayId || a.id}
+                                        </div>
+                                    ))}
+                                </div>
                             )}
-                        >
-                            <div className="flex items-center gap-2">
-                                <Cpu className="absolute left-2.5 w-4 h-4 opacity-50" />
-                                <span>{selectedAgent || "Select Agent"}</span>
-                            </div>
-                            <ChevronDown size={14} className={clsx("transition-transform", isAgentOpen && "rotate-180")} />
-                        </button>
+                        </div>
 
-                        {isAgentOpen && (
-                            <div className={clsx(
-                                "absolute z-[110] w-full mt-1 border rounded shadow-2xl max-h-48 overflow-y-auto animate-fadeIn",
-                                isDark ? "bg-gray-900 border-gray-700" : "bg-white border-slate-200"
-                            )}>
-                                {agents.map((a: Agent) => (
-                                    <div 
-                                        key={a.id}
-                                        onClick={() => { setSelectedAgent(a.id); setIsAgentOpen(false); }}
-                                        className="p-2 pl-9 text-sm cursor-pointer hover:bg-blue-600 hover:text-white transition-colors border-b border-gray-500/10 last:border-0"
-                                    >
-                                        {a.id} <span className="text-[10px] opacity-50 ml-2">[{a.model}]</span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Provider Selector (Custom Dropdown - UI Unified) */}
-                    <div className="space-y-1 relative">
-                        <label className="block text-xs font-bold uppercase opacity-50 tracking-wider">AI Model Provider</label>
-                        <button 
-                            type="button"
-                            onClick={() => { setIsProviderOpen(!isProviderOpen); setIsAgentOpen(false); }}
-                            className={clsx(
-                                "w-full pl-9 pr-4 p-2 rounded border text-sm flex items-center justify-between transition-all outline-none focus:ring-2 focus:ring-blue-500",
-                                isDark ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-slate-300 text-slate-900"
+                        <div className="space-y-1 relative">
+                            <label className="text-[9px] font-bold uppercase opacity-50">Provider</label>
+                            <button type="button" onClick={() => { setIsProviderOpen(!isProviderOpen); setIsAgentOpen(false); }}
+                                className={clsx("w-full h-9 px-3 rounded border text-[11px] flex items-center justify-between font-mono", isDark ? "bg-black border-gray-700" : "bg-white border-slate-300")}>
+                                <span className="truncate">{providers.find(p => p.id === provider)?.name || "Select"}</span>
+                                <ChevronDown size={12} className={clsx("transition-transform", isProviderOpen && "rotate-180")} />
+                            </button>
+                            {isProviderOpen && (
+                                <div className={clsx("absolute z-[120] w-full mt-1 border rounded shadow-2xl max-h-40 overflow-y-auto font-mono text-[11px]", isDark ? "bg-gray-900 border-gray-700" : "bg-white border-slate-200")}>
+                                    {providers.map((p) => (
+                                        <div key={p.id} onClick={() => { setProvider(p.id); setIsProviderOpen(false); }}
+                                            className="p-2 hover:bg-blue-600 hover:text-white cursor-pointer transition-colors border-b border-white/5 last:border-0">
+                                            {p.name}
+                                        </div>
+                                    ))}
+                                </div>
                             )}
-                        >
-                            <div className="flex items-center gap-2">
-                                <Boxes className="absolute left-2.5 w-4 h-4 opacity-50" />
-                                <span>{providers.find(p => p.id === provider)?.name || "Select Provider"}</span>
-                            </div>
-                            <ChevronDown size={14} className={clsx("transition-transform", isProviderOpen && "rotate-180")} />
-                        </button>
+                        </div>
+                    </div>
 
-                        {isProviderOpen && (
-                            <div className={clsx(
-                                "absolute z-[110] w-full mt-1 border rounded shadow-2xl max-h-48 overflow-y-auto animate-fadeIn",
-                                isDark ? "bg-gray-900 border-gray-700" : "bg-white border-slate-200"
-                            )}>
-                                {providers.map((p) => (
-                                    <div 
-                                        key={p.id}
-                                        onClick={() => { setProvider(p.id); setIsProviderOpen(false); }}
-                                        className="p-2 pl-9 text-sm cursor-pointer hover:bg-blue-600 hover:text-white transition-colors border-b border-gray-500/10 last:border-0"
-                                    >
-                                        {p.name}
-                                    </div>
-                                ))}
+                    <div className="space-y-3">
+                        {provider !== 'mock' && (
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-bold uppercase opacity-50 flex items-center gap-1"><Key size={10} /> API Key</label>
+                                <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
+                                    className={clsx("w-full h-9 px-3 rounded border text-[11px] outline-none focus:border-blue-500 font-mono", isDark ? "bg-black border-gray-700 text-blue-400" : "bg-white border-slate-300")} />
                             </div>
                         )}
-                    </div>
-
-                    {/* API Key */}
-                    {provider !== 'mock' && (
-                        <div className="space-y-1 animate-fadeIn">
-                            <label className="block text-xs font-bold uppercase opacity-50 tracking-wider">API Key</label>
-                            <div className="relative">
-                                <Key className="absolute left-2.5 top-2.5 w-4 h-4 opacity-50" />
-                                <input 
-                                    type="password" 
-                                    placeholder="sk-..." 
-                                    value={apiKey}
-                                    onChange={(e) => setApiKey(e.target.value)}
-                                    className={clsx(
-                                        "w-full pl-9 p-2 rounded border text-sm outline-none focus:ring-2 focus:ring-blue-500 transition-all",
-                                        isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-600" : "bg-white border-slate-300 placeholder-slate-400"
-                                    )}
-                                />
-                            </div>
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-bold uppercase opacity-50 flex items-center gap-1"><Cpu size={10} /> Model Override</label>
+                            <input type="text" placeholder="e.g. gpt-4-turbo" value={model} onChange={e => setModel(e.target.value)}
+                                className={clsx("w-full h-9 px-3 rounded border text-[11px] outline-none focus:border-blue-500 font-mono", isDark ? "bg-black border-gray-700" : "bg-white border-slate-300")} />
                         </div>
-                    )}
-
-                    {/* Model Name Override */}
-                    <div className="space-y-1">
-                        <label className="block text-xs font-bold uppercase opacity-50 tracking-wider">Model Name (Optional)</label>
-                        <div className="relative">
-                            <Settings className="absolute left-2.5 top-2.5 w-4 h-4 opacity-50" />
-                            <input 
-                                type="text" 
-                                placeholder="e.g. gpt-4-turbo-preview" 
-                                value={model}
-                                onChange={(e) => setModel(e.target.value)}
-                                className={clsx(
-                                    "w-full pl-9 p-2 rounded border text-sm outline-none focus:ring-2 focus:ring-blue-500 transition-all",
-                                    isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-600" : "bg-white border-slate-300 placeholder-slate-400"
-                                )}
-                            />
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-bold uppercase opacity-50 flex items-center gap-1"><MessageSquare size={10} /> System Persona</label>
+                            <textarea rows={3} value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)}
+                                className={clsx("w-full p-3 rounded border text-[11px] outline-none focus:border-blue-500 font-mono resize-none", isDark ? "bg-black border-gray-700" : "bg-white border-slate-300")} />
                         </div>
                     </div>
 
-                    {/* System Prompt */}
-                    <div className="space-y-1">
-                        <label className="block text-xs font-bold uppercase opacity-50 tracking-wider">Persona / System Prompt</label>
-                        <div className="relative">
-                            <MessageSquare className="absolute left-2.5 top-2.5 w-4 h-4 opacity-50" />
-                            <textarea 
-                                rows={3}
-                                value={systemPrompt}
-                                onChange={(e) => setSystemPrompt(e.target.value)}
-                                className={clsx(
-                                    "w-full pl-9 p-2 rounded border text-sm outline-none focus:ring-2 focus:ring-blue-500 transition-all resize-none",
-                                    isDark ? "bg-gray-800 border-gray-700 text-white placeholder-gray-600" : "bg-white border-slate-300 placeholder-slate-400"
-                                )}
-                            />
-                        </div>
-                    </div>
-
-                    <button 
-                        type="submit" 
-                        disabled={isLoading || !selectedAgent}
-                        className={clsx(
-                            "w-full font-bold p-2.5 rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg",
-                            isLoading || !selectedAgent 
-                                ? "bg-gray-600 cursor-not-allowed opacity-50" 
-                                : "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20 active:scale-[0.98]"
-                        )}
-                    >
-                        <Save className="w-4 h-4" />
-                        {isLoading ? 'Updating...' : 'Save Configuration'}
+                    <button type="submit" disabled={isLoading}
+                        className={clsx("w-full h-10 mt-2 font-bold rounded flex items-center justify-center gap-2 transition-all uppercase text-[11px] tracking-widest",
+                            isLoading ? "bg-gray-700 opacity-50 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg active:scale-[0.98]")}>
+                        <Save size={14} />
+                        {isLoading ? 'Updating...' : 'Deploy_Config'}
                     </button>
                 </form>
             </div>
