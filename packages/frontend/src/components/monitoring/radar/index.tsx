@@ -1,0 +1,118 @@
+// src/components/monitoring/radar/index.tsx
+import React, { Suspense, useMemo } from 'react';
+import { Canvas } from '@react-three/fiber';
+import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
+import { MousePointer2, Move, ZoomIn } from 'lucide-react';
+import clsx from 'clsx';
+import { useATC } from '@/hooks/system/useATC';
+import { useUI } from '@/hooks/system/useUI';
+import { UIContext } from '@/contexts/UIProvider'; 
+import { AgentDrone } from './AgentDrone';
+import { RadarLabels } from './RadarLabels';
+import { RadarBackground } from './RadarBackground';
+import { CentralHub } from './CentralHub';
+import { AgentDetailPopup } from './AgentDetailPopup';
+import { CameraController } from './CameraController';
+import { Agent } from '@/contexts/atcTypes';
+
+export const Radar: React.FC<{ compact?: boolean; isMainView?: boolean }> = ({ compact = false, isMainView = false }) => {
+    const { agents, state, togglePause, togglePriority, transferLock, terminateAgent } = useATC();
+    const uiValues = useUI();
+    const { isDark, selectedAgentId, setSelectedAgentId } = uiValues;
+
+    const selectedAgent = useMemo(() => 
+        agents.find((a: Agent) => a.id === selectedAgentId), 
+    [agents, selectedAgentId]);
+
+    const targetPos = useMemo(() => 
+        selectedAgent ? (selectedAgent.position as [number, number, number]) : null,
+    [selectedAgent]);
+
+    return (
+        <div className={clsx("w-full h-full relative overflow-hidden", isDark ? "bg-[#050505]" : "bg-[#f8fafc]")}>
+            {!compact && (
+                <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 pointer-events-none">
+                    <div className={clsx("flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md text-[9px] font-mono font-bold", isDark ? "bg-black/40 border-white/10 text-white/60" : "bg-white/60 border-black/5 text-black/60")}>
+                        <div className="flex items-center gap-1.5 border-r border-current pr-2">
+                            <MousePointer2 size={10} className="text-blue-500" />
+                            <span>L-CLICK: SELECT</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 border-r border-current pr-2">
+                            <ZoomIn size={10} className="text-emerald-500" />
+                            <span>SCROLL: ZOOM</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <Move size={10} className="text-purple-500" />
+                            <span>R-CLICK: PAN</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <Canvas 
+                shadows 
+                gl={{ antialias: true, alpha: true }}
+                onPointerMissed={(e) => {
+                    if (e.button === 0) setSelectedAgentId(null);
+                }}
+            >
+                <UIContext.Provider value={uiValues}>
+                    <PerspectiveCamera makeDefault position={[12, 12, 12]} fov={isMainView ? 45 : 60} />
+                    <OrbitControls 
+                        makeDefault 
+                        enableZoom={true} 
+                        enablePan={true} 
+                        maxDistance={60} 
+                        minDistance={3}
+                        enableDamping={true}
+                        dampingFactor={0.08}
+                    />
+                    
+                    <CameraController targetPosition={targetPos} />
+                    <ambientLight intensity={isDark ? 0.4 : 0.8} />
+                    <pointLight position={[10, 15, 10]} intensity={1.5} />
+                    
+                    <Suspense fallback={null}>
+                        <RadarBackground isDark={isDark} />
+                        <CentralHub 
+                            isLocked={!!state?.holder} 
+                            isOverride={!!state?.overrideSignal} 
+                            holder={state?.holder || null} 
+                            isDark={isDark} 
+                        />
+                        
+                        {agents.map((agent: Agent) => (
+                            <AgentDrone
+                                key={agent.id}
+                                id={agent.id}
+                                position={agent.position as [number, number, number]}
+                                isLocked={state?.holder === agent.id}
+                                isOverride={state.overrideSignal}
+                                color={agent.color || '#3b82f6'}
+                                onClick={(id) => setSelectedAgentId(id)}
+                                isPaused={agent.status === 'paused' || agent.isPaused === true || !!state?.globalStop}
+                                isPriority={!!agent.priority}
+                            />
+                        ))}
+                        
+                        <RadarLabels />
+
+                        {selectedAgent && (
+                            <AgentDetailPopup 
+                                agent={selectedAgent}
+                                position={selectedAgent.position as [number, number, number]}
+                                onClose={() => setSelectedAgentId(null)}
+                                isDark={isDark}
+                                onTerminate={terminateAgent}
+                                onTogglePriority={togglePriority}
+                                onTransferLock={transferLock}
+                                onTogglePause={togglePause}
+                                isCompact={compact}
+                            />
+                        )}
+                    </Suspense>
+                </UIContext.Provider>
+            </Canvas>
+        </div>
+    );
+};
