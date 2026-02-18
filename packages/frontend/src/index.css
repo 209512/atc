@@ -1,71 +1,78 @@
+/* src/index.css */
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  /* 화이트모드용: 트랙을 투명하게 설정하여 배경색이 비치도록 수정 */
-  --sb-track: transparent;
-  --sb-thumb: #cbd5e1;
-  color-scheme: light dark;
+@layer base {
+  :root {
+    --z-index-radar: 0;
+    --z-index-sidebar: 50;
+    --z-index-hud: 60;
+    --z-index-popover: 100;
+    --z-index-tooltip: 1000;
+    --sb-track: transparent;
+    --sb-thumb: #cbd5e1;
+    color-scheme: light dark;
+  }
+
+  .dark, :root[class*="dark"] {
+    --sb-thumb: #1e293b;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden; 
+    background: #05090a;
+  }
 }
 
-/* 시스템이나 상위 클래스에 .dark가 있을 때 변수 변경 */
-.dark, :root[class*="dark"] {
-  /* 다크모드: 트랙을 투명하게 설정하여 사이드바/터미널 배경과 일치시킴 */
-  --sb-track: transparent;
-  --sb-thumb: #1e293b;
-}
-
-/* 1. 전체 창 스크롤 방지 (대시보드 필수 설정) */
-html, body {
-  margin: 0;
-  padding: 0;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden; 
-}
-
-/* 2. 커스텀 스크롤바 디자인 */
-.custom-scrollbar::-webkit-scrollbar {
-    /* 4px로 얇고 정교한 느낌 제공 */
+@layer components {
+  .custom-scrollbar::-webkit-scrollbar {
     width: 4px;
     height: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
     background: var(--sb-track);
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
     background: var(--sb-thumb);
     border-radius: 10px;
-    /* 스크롤바가 트랙 영역 내에서 깔끔하게 떨어지도록 설정 */
     background-clip: padding-box;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #64748b; /* 라이트모드 호버 */
-}
-
-/* 다크모드 전용 호버 색상 (더 자연스러운 대비) */
-.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+  }
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #475569;
-}
+  }
 
-/* CRT Scanline */
-.scanline::before {
-  content: " ";
-  display: block;
-  position: absolute;
-  top: 0; left: 0; bottom: 0; right: 0;
-  background: linear-gradient(to bottom, rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
-  background-size: 100% 4px;
-  z-index: 9999;
-  pointer-events: none;
-  opacity: 0.15;
+  .scanline::before {
+    content: " ";
+    display: block;
+    position: absolute;
+    top: 0; left: 0; bottom: 0; right: 0;
+    background: linear-gradient(to bottom, rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+    background-size: 100% 4px;
+    z-index: 999;
+    pointer-events: none;
+    opacity: 0.15;
+  }
 }
 
 .font-mono {
-    font-family: 'JetBrains Mono', monospace !important;
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  overflow: hidden;
 }

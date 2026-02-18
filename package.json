@@ -1,18 +1,22 @@
 {
   "name": "atc",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "description": "ATC (Agent Traffic Control) System Monorepo",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "install:all": "pnpm install",
+    "dev": "pnpm --filter \"*\" dev",
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:backend": "pnpm --filter backend dev",
+    "build": "pnpm --filter \"*\" build",
+    "lint": "pnpm --filter \"*\" lint",
+    "clean": "find . -name \"node_modules\" -type d -prune -exec rm -rf '{}' +",
+    "test": "pnpm --filter \"*\" test"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
   "packageManager": "pnpm@10.28.1",
   "dependencies": {
-    "@hello-pangea/dnd": "^18.0.1",
-    "@radix-ui/react-tooltip": "^1.2.8",
-    "@react-three/postprocessing": "^3.0.4"
+    "@react-three/drei": "^10.7.7"
   }
 }
