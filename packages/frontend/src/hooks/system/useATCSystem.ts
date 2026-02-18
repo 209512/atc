@@ -1,5 +1,6 @@
+// src/hooks/system/useATCSystem.ts
 import { useState, useCallback } from 'react';
-import { Agent, ATCState, LogEntry } from '../contexts/atcTypes';
+import { Agent, ATCState, LogEntry } from '@/contexts/atcTypes';
 
 export const useATCSystem = () => {
   const [state, setState] = useState<ATCState>({

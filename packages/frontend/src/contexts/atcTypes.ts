@@ -1,3 +1,4 @@
+// src/contexts/atcTypes.ts
 export interface LogEntry {
   id: string;
   agentId: string;
@@ -10,12 +11,21 @@ export interface LogEntry {
 
 export interface Agent {
   id: string;
+  displayId?: string;
+  name?: string;
   model: string;
-  status: 'active' | 'waiting' | 'idle' | 'paused';
+  status: 'active' | 'waiting' | 'idle' | 'paused' | 'processing';
   activity?: string;
   priority?: boolean;
   isPaused?: boolean;
+  color?: string;
   position: [number, number, number];
+  metrics?: {
+    ts: string;
+    lat: string;
+    tot: string;
+    load: string;
+  };
 }
 
 export interface ATCState {
