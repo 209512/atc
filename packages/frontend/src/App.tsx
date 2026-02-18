@@ -1,22 +1,24 @@
+// src/App.tsx
 import React from 'react';
 import clsx from 'clsx';
-import { useATC } from './hooks/useATC';
-import { Dashboard } from './components/Dashboard';
-import { Sidebar } from './components/Sidebar';
+import { useUI } from '@/hooks/system/useUI';
+import { Dashboard } from '@/components/layout/Dashboard';
+import { SidebarContainer } from '@/components/layout/SidebarContainer';
 
 const App = () => {
-  const { isDark } = useATC();
+  const { isDark } = useUI();
 
   return (
     <div className={clsx(
-      "min-h-screen font-sans flex overflow-hidden relative min-w-0", 
-      isDark ? "bg-[#05090a] text-gray-300" : "bg-[#f8fafc] text-slate-800"
+      "h-screen w-screen font-sans flex overflow-hidden relative select-none", 
+      isDark ? "bg-[#05090a] text-gray-300" : "bg-[#f1f5f9] text-slate-800"
     )}>
-      {/* 실제 메인 콘텐츠 영역 */}
-      <Dashboard />
+      <div className="flex-1 min-w-0 h-full relative overflow-hidden">
+        <Dashboard />
+      </div>
       
-      {/* 우측 컨트롤 사이드바 */}
-      <Sidebar />
+      {/* 사이드바는 HUD보다 낮은 순위 혹은 동일 순위로 설정 (z-50) */}
+      <SidebarContainer />
     </div>
   );
 };
