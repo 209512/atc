@@ -1,3 +1,4 @@
+// index.js
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -21,7 +22,7 @@ app.get('/api/stream', async (req, res) => {
       const data = {
         state: {
           ...atcService.state,
-          logs: atcService.logs || []
+          logs: atcService.state.logs || []
         },
         agents: agents
       };
@@ -60,45 +61,48 @@ app.post('/api/stop', async (req, res) => {
     res.json({ success: true, globalStop: enable });
 });
 
-app.post('/api/agents/:id/pause', async (req, res) => {
-    const { id } = req.params;
+app.post('/api/agents/:uuid/pause', async (req, res) => {
+    const { uuid } = req.params;
     const { pause } = req.body;
-    await atcService.pauseAgent(id, pause);
+    await atcService.pauseAgent(uuid, pause);
     res.json({ success: true });
 });
 
-app.delete('/api/agents/:id', async (req, res) => {
-    const { id } = req.params;
-    await atcService.terminateAgent(id);
+app.delete('/api/agents/:uuid', async (req, res) => {
+    const { uuid } = req.params;
+    await atcService.terminateAgent(uuid);
     res.json({ success: true });
 });
 
-app.post('/api/agents/:id/rename', async (req, res) => {
-    const { id } = req.params;
-    const { newId } = req.body;
-    const result = await atcService.renameAgent(id, newId);
+app.post('/api/agents/:uuid/rename', async (req, res) => {
+    const { uuid } = req.params;
+    const { newName } = req.body;
+    
+    if (!newName) return res.status(400).json({ error: 'New Name is required' });
+    
+    const result = await atcService.renameAgent(uuid, newName);
     if (result) res.json({ success: true });
     else res.status(404).json({ error: 'Agent not found' });
 });
 
-app.post('/api/agents/:id/priority', async (req, res) => {
-    const { id } = req.params;
+app.post('/api/agents/:uuid/priority', async (req, res) => {
+    const { uuid } = req.params;
     const { enable } = req.body;
-    await atcService.togglePriority(id, enable);
+    await atcService.togglePriority(uuid, enable);
     res.json({ success: true });
 });
 
 app.post('/api/agents/priority-order', async (req, res) => {
-    const { order } = req.body;
+    const { order } = req.body; // uuid 배열
     if (!Array.isArray(order)) return res.status(400).json({ error: 'Order must be an array' });
     
     await atcService.updatePriorityOrder(order);
     res.json({ success: true });
 });
 
-app.post('/api/agents/:id/transfer-lock', async (req, res) => {
-    const { id } = req.params;
-    await atcService.transferLock(id);
+app.post('/api/agents/:uuid/transfer-lock', async (req, res) => {
+    const { uuid } = req.params;
+    await atcService.transferLock(uuid);
     res.json({ success: true });
 });
 
@@ -109,7 +113,7 @@ app.get('/api/agents/status', async (req, res) => {
 
 app.post('/api/agents/scale', async (req, res) => {
   const { count } = req.body;
-  if (!count || count < 0 || count > 10) { 
+  if (count === undefined || count < 0 || count > 10) { 
     return res.status(400).json({ error: 'Invalid agent count (0-10)' });
   }
 
@@ -118,19 +122,19 @@ app.post('/api/agents/scale', async (req, res) => {
 });
 
 app.post('/api/agents/register', (req, res) => {
-    const { id, config } = req.body;
-    if (!id || !config) return res.status(400).json({ error: 'Missing id or config' });
+    const { uuid, config } = req.body;
+    if (!uuid || !config) return res.status(400).json({ error: 'Missing uuid or config' });
     
-    atcService.registerAgentConfig(id, config);
-    res.json({ success: true, message: `Registered config for ${id}` });
+    atcService.registerAgentConfig(uuid, config);
+    res.json({ success: true, message: `Registered config for agent` });
 });
 
-app.post('/api/agents/:id/config', (req, res) => {
-    const { id } = req.params;
+app.post('/api/agents/:uuid/config', (req, res) => {
+    const { uuid } = req.params;
     const { config } = req.body;
     
-    atcService.registerAgentConfig(id, config);
-    res.json({ success: true, message: `Updated config for ${id}` });
+    atcService.registerAgentConfig(uuid, config);
+    res.json({ success: true, message: `Updated config for agent` });
 });
 
 atcService.init()

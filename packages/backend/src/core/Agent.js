@@ -1,24 +1,43 @@
-const { Client } = require('hazelcast-client');  
-const getHazelcastConfig = require('../config/hazelcast.config');  
+// src/core/Agent.js
+const { v4: uuidv4 } = require('uuid');
+const hazelcastManager = require('./HazelcastManager');
 const CONSTANTS = require('../config/constants');
 const ProviderFactory = require('./providers/ProviderFactory');
+const PhysicsEngine = require('./PhysicsEngine');
 
 class Agent {  
   constructor(id, eventBus, config = {}, sharedClient = null) {  
-    this.id = id;  
+    this.uuid = uuidv4(); 
+    this.id = id;
+    
     this.eventBus = eventBus;  
     this.config = config; 
-    this.client = sharedClient; 
+    this.client = sharedClient || hazelcastManager.getClient();
     this.isRunning = false;  
     this.provider = null;
     this.currentLock = null;
     this.currentFence = null;
     this.ownsClient = false;
+    this.errorCount = 0;
+
+    const idMatch = id.match(/\d+/);
+    this.seed = idMatch ? parseInt(idMatch[0]) : Math.floor(Math.random() * 1000);
+
+    this.startTime = Date.now(); 
+    this.pausedDuration = 0;
+    this.pauseStartedAt = null;
+    this.lastUpdateTime = Date.now();
+
+    this.state = {
+        status: CONSTANTS.STATUS_IDLE,
+        resource: CONSTANTS.RESOURCE_NONE,
+        activity: 'INITIALIZING'
+    };
   }  
 
   log(msg, type = 'info') {
     if (this.eventBus && typeof this.eventBus.addLog === 'function') {
-        this.eventBus.addLog(this.id, msg, type);
+        this.eventBus.addLog(this.uuid, msg, type);
     }
   }
 
@@ -31,88 +50,94 @@ class Agent {
       await this.provider.init().catch(e => console.warn(`[${this.id}] Provider init: ${e.message}`));
 
       if (!this.client) {
-          const config = getHazelcastConfig(this.id);  
-          this.client = await Client.newHazelcastClient(config);  
-          this.ownsClient = true;
+          await hazelcastManager.init();
+          this.client = hazelcastManager.getClient();
       }
 
       this.statusMap = await this.client.getMap(CONSTANTS.MAP_AGENT_STATUS);
       this.commandsMap = await this.client.getMap(CONSTANTS.MAP_AGENT_COMMANDS);
 
-      const initialCommand = await this.commandsMap.get(this.id);
-      const startStatus = (initialCommand && initialCommand.cmd === CONSTANTS.CMD_PAUSE) 
-          ? CONSTANTS.STATUS_PAUSED 
-          : CONSTANTS.STATUS_IDLE;
-
       this.log(`Agent Online: ${this.id}`, 'system');
-      await this.updateStatus(startStatus, CONSTANTS.RESOURCE_NONE, startStatus === CONSTANTS.STATUS_PAUSED ? "SUSPENDED" : "READY");
+
+      this.startTime = Date.now();
+      await this.updateStatus(CONSTANTS.STATUS_IDLE, CONSTANTS.RESOURCE_NONE, "READY");
+
+      this.posUpdateTimer = setInterval(() => {
+          if (this.isRunning) {
+              this.updateStatus(this.state.status, this.state.resource, this.state.activity);
+          }
+      }, 50);
 
       this.loop();  
     } catch (err) {  
-      console.error(`❌ Agent ${this.id} failed to start:`, err);  
+      console.error(`❌ Agent ${this.id} (${this.uuid}) failed to start:`, err);  
       this.isRunning = false;  
     }  
   }  
   
   async loop() {   
+      if (!this.client) return;
       const cpSubsystem = this.client.getCPSubsystem();
     
       while (this.isRunning) {   
         try {
           if (!this.isRunning) break;
 
-          const command = await this.commandsMap.get(this.id);
-          if (command && command.cmd === CONSTANTS.CMD_PAUSE) {
-              await this.updateStatus(CONSTANTS.STATUS_PAUSED, CONSTANTS.RESOURCE_NONE, "SUSPENDED");
+          const command = await this.commandsMap.get(this.uuid);
+          const isPausedCmd = command && command.cmd === CONSTANTS.CMD_PAUSE;
+          const isGlobalStopped = !!this.eventBus.state.globalStop;
+
+          if (isPausedCmd || isGlobalStopped) {
+              if (!this.pauseStartedAt) {
+                  this.pauseStartedAt = Date.now();
+              }
+
+              await this.updateStatus(CONSTANTS.STATUS_PAUSED, CONSTANTS.RESOURCE_NONE, isGlobalStopped ? "GLOBAL_HALT" : "SUSPENDED");
+              
               if (this.currentLock && this.currentFence) {
                   try { await this.currentLock.unlock(this.currentFence); } catch (e) {}
                   this.currentLock = null;
                   this.currentFence = null;
-                  this.emitReleased(this.id);
+                  this.emitReleased(this.uuid);
               }
-              await new Promise(r => setTimeout(r, 1000));
+              await new Promise(r => setTimeout(r, 200)); 
               continue; 
           }
-          
-          if (!this.isRunning) break;
 
-          const isTarget = this.eventBus.state.forcedCandidate === this.id;
-          const canAcquire = await this.eventBus.canAgentAcquire(this.id);
+          if (this.pauseStartedAt) {
+              const pauseEndedAt = Date.now();
+              this.pausedDuration += (pauseEndedAt - this.pauseStartedAt);
+              this.pauseStartedAt = null; 
+              this.state.status = CONSTANTS.STATUS_IDLE;
+          }
+
+          const isTarget = this.eventBus.state.forcedCandidate === this.uuid;
+          const canAcquire = await this.eventBus.canAgentAcquire(this.uuid);
+          
           if (!isTarget && !canAcquire) {
               await this.updateStatus(CONSTANTS.STATUS_WAITING, CONSTANTS.RESOURCE_NONE, "WAITING");
-              await new Promise(r => setTimeout(r, 1000));
+              await new Promise(r => setTimeout(r, 500));
               continue;
           }
 
-          if (!this.isRunning) break;
-
           const pList = this.eventBus.state.priorityAgents || [];
-          const rank = pList.indexOf(this.id);
-          const delay = isTarget ? 0 : (rank !== -1 ? rank * 200 : (pList.length * 500 + Math.random() * 500));
+          const rank = pList.indexOf(this.uuid);
+          const delay = isTarget ? 0 : (rank !== -1 ? rank * CONSTANTS.PRIORITY_RANK_DELAY : (pList.length * CONSTANTS.NORMAL_BASE_DELAY + Math.random() * 200));
           await new Promise(r => setTimeout(r, delay));
-
-          if (!this.isRunning) break;
-
-          const finalCheck = await this.commandsMap.get(this.id);
-          if (finalCheck && finalCheck.cmd === CONSTANTS.CMD_PAUSE) continue;
 
           const currentResourceId = this.eventBus.state.resourceId;
           const lock = await cpSubsystem.getLock(currentResourceId);
-          const waitLimit = isTarget ? 1000 : 200;
+          const waitLimit = isTarget ? CONSTANTS.LOCK_TRY_WAIT_TARGET : CONSTANTS.LOCK_TRY_WAIT_NORMAL;
           
           const acquiredFence = await lock.tryLock(waitLimit);   
             
           if (acquiredFence !== null && acquiredFence !== undefined) {
-            if (!this.isRunning) {
-                try { await lock.unlock(acquiredFence); } catch (e) {}
-                break;
-            }
-
+            this.errorCount = 0;
             this.currentLock = lock;
             this.currentFence = acquiredFence;
 
-            this.log(`🔒 Lock Acquired (Fence: ${acquiredFence})`, isTarget ? 'success' : 'info');
-            this.emitAcquired(this.id, acquiredFence.toString(), 0);   
+            this.log(`🔒 Lock Acquired`, isTarget ? 'success' : 'info');
+            this.emitAcquired(this.uuid, acquiredFence.toString(), 0);   
             await this.updateStatus(CONSTANTS.STATUS_ACTIVE, currentResourceId, "PROCESSING");
     
             await this.executeTask(isTarget);
@@ -123,14 +148,14 @@ class Agent {
 
             this.currentLock = null;
             this.currentFence = null;
-            this.emitReleased(this.id);
+            this.emitReleased(this.uuid);
             await this.updateStatus(CONSTANTS.STATUS_IDLE, CONSTANTS.RESOURCE_NONE, "IDLE");
-            await new Promise(r => setTimeout(r, 800));   
+            await new Promise(r => setTimeout(r, 500));   
           } else {
-            await new Promise(r => setTimeout(r, 500));
+            await new Promise(r => setTimeout(r, 200));
           }
-        } catch (err) {   
-          await new Promise(r => setTimeout(r, 1000));   
+        } catch (err) {
+            await this.handleError(err);
         }   
       }   
   }
@@ -138,26 +163,47 @@ class Agent {
   async updateStatus(status, resource, activity) {
       if (this.statusMap && this.isRunning) {
           try {
-              await this.statusMap.put(this.id, {
-                  id: this.id, 
-                  status: status || 'idle',
-                  resource: resource || 'none',
-                  activity: activity || 'INITIALIZING',
+              const now = Date.now();
+              this.state.status = status || this.state.status;
+              this.state.resource = resource || this.state.resource;
+              this.state.activity = activity || this.state.activity;
+
+              let totalPauseTime = this.pausedDuration;
+              if (this.pauseStartedAt) {
+                  totalPauseTime += (now - this.pauseStartedAt);
+              }
+
+              const activeTime = (now - this.startTime) - totalPauseTime;
+              this.lastUpdateTime = now;
+
+              const position = PhysicsEngine.getOrbitPosition(this.uuid, this.seed, activeTime);
+
+              await this.statusMap.put(this.uuid, {
+                  uuid: this.uuid,
+                  id: this.uuid,
+                  displayName: this.id,
+                  status: this.state.status,
+                  resource: this.state.resource,
+                  activity: this.state.activity,
                   model: this.config.model || 'Mock',
-                  lastUpdated: Date.now()
+                  position: position, 
+                  lastUpdated: now
               });
           } catch (e) {
-              console.error(`Status update failed for ${this.id}`, e);
+              console.error(`[${this.id}] Status Update Failed:`, e.message);
           }
       }
   }
+  
+  async handleError(err) {
+      this.errorCount++;
+      this.log(`⚠️ Runtime Error (${this.errorCount}): ${err.message}`, 'warn');
+      await new Promise(r => setTimeout(r, 1000));
+  }
 
   async executeTask(isTarget) {
-    this.log(`🧠 Task Started... (${isTarget ? 'FORCE' : 'NORMAL'})`);
-    await new Promise(r => setTimeout(r, 1200)); 
-    
+    await new Promise(r => setTimeout(r, 1000)); 
     if (isTarget) {
-      this.log(`✨ Transfer Success & Resetting Resource`, 'success');
       this.eventBus.state.forcedCandidate = null;
       this.eventBus.state.resourceId = `lock-${Date.now()}`;
       this.eventBus.emitState();
@@ -166,20 +212,21 @@ class Agent {
 
   async stop() {  
     this.isRunning = false;  
+    if (this.posUpdateTimer) clearInterval(this.posUpdateTimer);
     try {
-        if (this.statusMap) await this.statusMap.remove(this.id);
+        if (this.statusMap) await this.statusMap.remove(this.uuid);
         if (this.currentLock && this.currentFence) {
             await this.currentLock.unlock(this.currentFence);
         }
     } catch (e) {}
-
-    if (this.client && this.ownsClient) {
-      try { await this.client.shutdown(); } catch (e) {}  
-    }  
   }  
 
-  emitAcquired(holder, token, latency) { this.eventBus.emit('agent-acquired', { id: holder, fence: token, latency }); }  
-  emitReleased(holder) { this.eventBus.emit('agent-released', { id: holder }); }  
+  emitAcquired(holderUuid, token, latency) { 
+      this.eventBus.emit('agent-acquired', { id: holderUuid, fence: token, latency }); 
+  }  
+  emitReleased(holderUuid) { 
+      this.eventBus.emit('agent-released', { id: holderUuid }); 
+  }  
 }  
   
 module.exports = Agent;

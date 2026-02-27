@@ -1,3 +1,4 @@
+// src/config/hazelcast.config.js
 const fs = require('fs');
 const path = require('path');
 
@@ -5,9 +6,24 @@ const getHazelcastConfig = (agentIdOrName = 'ATC-Client') => {
   const isLocalEnv = process.env.USE_LOCAL_HZ === 'true';
 
   const config = {
-    clusterName: 'dev', 
+    clusterName: process.env.HZ_CLUSTER_NAME || 'dev', 
     network: {
       connectionTimeout: 10000
+    },
+    properties: {
+      'hazelcast.client.heartbeat.interval': 5000,
+      'hazelcast.client.heartbeat.timeout': 60000,
+      'hazelcast.client.invocation.timeout.millis': 120000,
+      'hazelcast.client.cloud.url': 'https://api.viridian.hazelcast.com'
+    },
+    connectionStrategy: {
+        reconnectMode: 'ON',
+        connectionRetry: {
+            initialBackoffMillis: 1000,
+            maxBackoffMillis: 30000,
+            multiplier: 2,
+            clusterConnectTimeoutMillis: -1 
+        }
     }
   };
 
@@ -19,16 +35,15 @@ const getHazelcastConfig = (agentIdOrName = 'ATC-Client') => {
     config.network.ssl = {
       enabled: true,
       sslOptions: {
-        key: fs.readFileSync(path.join(__dirname, '../../certs/client-key.pem')),
-        cert: fs.readFileSync(path.join(__dirname, '../../certs/client-cert.pem')),
-        ca: fs.readFileSync(path.join(__dirname, '../../certs/ca-cert.pem')),
-        rejectUnauthorized: false,
+        key: fs.readFileSync(process.env.HZ_CERT_KEY_PATH || path.join(__dirname, '../../certs/client-key.pem')),
+        cert: fs.readFileSync(process.env.HZ_CERT_PATH || path.join(__dirname, '../../certs/client-cert.pem')),
+        ca: fs.readFileSync(process.env.HZ_CA_PATH || path.join(__dirname, '../../certs/ca-cert.pem')),
+        rejectUnauthorized: process.env.NODE_ENV === 'production',
         passphrase: process.env.HAZELCAST_PASSWORD
       }
     };
   } else {
-    // 현재 사용자가 타겟팅하는 모드
-    console.log('🏠 Connecting to Local/Docker Hazelcast Mode (Target Cluster: atc)...');
+    console.log('🏠 Connecting to Local/Docker Hazelcast Mode...');
     
     config.network.clusterMembers = [
       process.env.HZ_ADDRESS || 'hazelcast:5701'

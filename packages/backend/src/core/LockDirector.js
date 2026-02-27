@@ -1,4 +1,6 @@
+// src/core/LockDirector.js
 const hazelcastManager = require('./HazelcastManager');
+const CONSTANTS = require('../config/constants');
 
 class LockDirector {
     constructor(atcService) {
@@ -6,9 +8,8 @@ class LockDirector {
         this.transferTimeoutRef = null;
     }
 
-    // 🔑 리소스 ID 갱신 메서드 통합
     refreshResourceId() {
-        this.atcService.state.resourceId = `traffic-control-lock-${Date.now()}`;
+        this.atcService.state.resourceId = `${CONSTANTS.LOCK_NAME}-${Date.now()}`;
         console.log(`🔄 [Director] Resource ID Refreshed: ${this.atcService.state.resourceId}`);
     }
 
@@ -24,7 +25,9 @@ class LockDirector {
             const cp = hazelcastManager.getClient().getCPSubsystem();
             const lock = await cp.getLock(this.atcService.state.resourceId);
             await lock.unlock().catch(() => {}); 
-        } catch (e) {}
+        } catch (e) {
+            console.error('Director: Human override unlock failed', e.message);
+        }
         
         return { success: true };
     }
@@ -52,13 +55,12 @@ class LockDirector {
 
     async transferLock(targetId) {
         if (this.atcService.state.forcedCandidate) {
-            console.warn(`⚠️ [Director] Transfer already in progress for ${this.atcService.state.forcedCandidate}. Ignoring request for ${targetId}`);
+            console.warn(`⚠️ [Director] Transfer already in progress for ${this.atcService.state.forcedCandidate}.`);
             return { success: false, error: 'Transfer in progress' };
         }
 
         const isPaused = await this.atcService.isAgentPaused(targetId);
         if (isPaused) {
-            console.error(`❌ [Director] Transfer Failed: ${targetId} is currently PAUSED.`);
             return { success: false, error: 'Target agent is paused' };
         }
         
@@ -86,13 +88,13 @@ class LockDirector {
 
         this.transferTimeoutRef = setTimeout(() => {
             if (this.atcService.state.forcedCandidate === targetId) {
-                console.warn(`⚠️ [Director] TRANSFER TIMEOUT - ${displayId} failed to grab the lock in time.`); 
+                console.warn(`⚠️ [Director] TRANSFER TIMEOUT - ${displayId} failed to grab the lock.`); 
                 this.atcService.state.forcedCandidate = null;
                 this.atcService.state.holder = null;
                 this.refreshResourceId();
                 this.atcService.emitState();
             }
-        }, 8000);
+        }, CONSTANTS.TRANSFER_TIMEOUT);
         
         return { success: true };
     }

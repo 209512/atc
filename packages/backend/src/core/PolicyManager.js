@@ -1,11 +1,10 @@
+// src/core/PolicyManager.js
 class PolicyManager {
     constructor(atcService) {
         this.atcService = atcService;
     }
 
-    /**
-     * 🛡️ [Gatekeeper] : 에이전트의 락 획득 권한 여부를 판단
-     */
+    // 🛡️ [Gatekeeper] : 에이전트의 락 획득 권한 여부를 판단
     async canAgentAcquire(agentId) {
         const state = this.atcService.state;
         
@@ -35,8 +34,6 @@ class PolicyManager {
             if (activePriorityAgents.length > 0) {
                 return activePriorityAgents.includes(agentId);
             }
-            
-            console.log(`ℹ️ [Policy] All priority agents are inactive. Yielding to normal agents.`);
         }
 
         return true;
