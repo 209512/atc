@@ -88,7 +88,7 @@ export const AgentIdentity = ({
                         <div className="relative flex items-center flex-1 min-w-0">
                             <input 
                                 autoFocus 
-                                placeholder="ID..."
+                                placeholder="CALLSIGN..."
                                 value={newName} 
                                 onChange={handleNameChange}
                                 onKeyDown={e => {

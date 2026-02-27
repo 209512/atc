@@ -10,7 +10,7 @@ import { Tooltip } from '@/components/common/Tooltip';
 const LOG_LINE_HEIGHT = 18; // 터미널 로그 한 줄 높이
 
 export const TerminalLog = () => {
-  const { state, isAdminMuted, toggleAdminMute } = useATC();
+  const { state, isAdminMuted, toggleAdminMute, agents } = useATC();
   const { isDark, sidebarWidth } = useUI();
   
   interface Log {
@@ -34,8 +34,15 @@ export const TerminalLog = () => {
   const lastCandidateRef = useRef<string | null>(null); 
   const lastOverrideRef = useRef<boolean>(false);
 
+  const getAgentName = (id: string | null) => {
+    if (!id) return 'UNKNOWN';
+    if (id.includes('Human')) return 'HUMAN_OPERATOR';
+    const agent = agents.find(a => a.id === id);
+    return agent?.displayId || id;
+  };
+
   const addLog = (type: string, messageTech: string, messageStd: string) => {
-      setLogs(prev => [...prev.slice(-499), { // 최대 500개 유지
+      setLogs(prev => [...prev.slice(-499), { // 최대 500개
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, 
           timestamp: new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }), 
           type, 
@@ -46,35 +53,40 @@ export const TerminalLog = () => {
 
   useEffect(() => {
     if (!state.forcedCandidate && lastCandidateRef.current && state.holder === lastCandidateRef.current) {
-        addLog('info', `⚡ [ACQ] ${state.holder} SEIZED CONTROL`, `⚡ SUCCESS: ${state.holder} is Master`);
+        const name = getAgentName(state.holder);
+        addLog('info', `⚡ [ACQ] ${name} SEIZED CONTROL`, `⚡ SUCCESS: ${name} is Master`);
         lastCandidateRef.current = null;
         lastHolderRef.current = state.holder;
         return;
     }
+
     if (state.forcedCandidate && state.forcedCandidate !== lastCandidateRef.current) {
-        addLog('info', `📡 [CMD] SEIZE TARGET -> ${state.forcedCandidate}`, `📡 ORDER: Switching Master to ${state.forcedCandidate}`);
+        const name = getAgentName(state.forcedCandidate);
+        addLog('info', `📡 [CMD] SEIZE TARGET -> ${name}`, `📡 ORDER: Switching Master to ${name}`);
         lastCandidateRef.current = state.forcedCandidate;
     }
+
     if (state.holder !== lastHolderRef.current) {
         if (state.holder && !state.holder.includes('Human') && state.holder !== 'RELEASING...') {
-            addLog('info', `🔒 [GRANTED] ${state.holder.toLowerCase()} (latency: ${state.latency}ms)`, `🔹 Active: ${state.holder}`);
+            const name = getAgentName(state.holder);
+            addLog('info', `🔒 [GRANTED] ${name.toLowerCase()} (latency: ${state.latency}ms)`, `🔹 Active: ${name}`);
         }
         lastHolderRef.current = state.holder;
     }
+
     if (state.overrideSignal && !lastOverrideRef.current) {
         addLog('critical', `🚨 !!! ADMIN_OVERRIDE_ACTIVE !!!`, `🚨 SYSTEM UNDER DIRECT CONTROL`);
         lastOverrideRef.current = true;
     } else if (!state.overrideSignal && lastOverrideRef.current) {
         lastOverrideRef.current = false;
     }
-  }, [state.holder, state.forcedCandidate, state.overrideSignal, state.latency]);
+  }, [state.holder, state.forcedCandidate, state.overrideSignal, state.latency, agents]);
 
   const filteredLogs = useMemo(() => 
     logs.filter(l => filter === 'ALL' || l.type === filter.toLowerCase()),
     [logs, filter]
   );
 
-  // 가상화 인덱스 계산
   const visibleLogs = useMemo(() => {
     const start = Math.floor(scrollTop / LOG_LINE_HEIGHT);
     const end = Math.min(filteredLogs.length, start + 15);

@@ -2,7 +2,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { Agent, ATCState } from '@/contexts/atcTypes';
 
-// Vite 클라이언트 타입을 인식하지 못할 경우를 대비한 캐스팅
 const env = (import.meta as any).env;
 const STREAM_URL = env?.VITE_API_URL 
   ? `${env.VITE_API_URL}/stream` 
@@ -32,7 +31,7 @@ export const useATCStream = (
     const now = Date.now();
 
     if (bufferedAgents) {
-      setAgents((_prevAgents) => {
+      setAgents((prevAgents) => {
         const processed = bufferedAgents.map((agent: any, i: number) => {
           const originalId = String(agent.id);
           
@@ -51,16 +50,24 @@ export const useATCStream = (
             if (agentLocks.size === 0) fieldLocks.current.delete(originalId);
           }
 
+          const rawPos = finalAgent.position;
+          const prevAgent = prevAgents.find(a => a.id === originalId);
+          
+          const validPosition = (Array.isArray(rawPos) && rawPos.length === 3) 
+            ? (rawPos as [number, number, number]) 
+            : (prevAgent?.position || getSpiralPos(i)); 
+
           return {
             ...finalAgent,
             id: originalId,
-            displayId: agent.name || originalId,
+            uuid: originalId,
+            displayId: agent.displayName || originalId,
             status: String(finalAgent.status || 'idle').toLowerCase() as any,
-            position: agent.position || getSpiralPos(i)
+            position: validPosition
           };
         }).filter(Boolean) as Agent[];
 
-        return processed.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+        return processed.sort((a, b) => (a.displayId || '').localeCompare(b.displayId || '', undefined, { numeric: true }));
       });
       dataBuffer.current.agents = null;
     }
@@ -77,8 +84,8 @@ export const useATCStream = (
             timestamp: now,
             agentId: currentHolder,
             message: isTransfer 
-              ? `[${currentHolder}] LOCK ACQUIRED (MANUAL TRANSFER)` 
-              : `[${currentHolder}] ACQUIRED AUTONOMOUS LOCK`,
+              ? `LOCK ACQUIRED (MANUAL TRANSFER)` 
+              : `ACQUIRED AUTONOMOUS LOCK`,
             type: 'success'
           };
           localPersistentLogs.current.push(newAutoLog);
@@ -89,6 +96,7 @@ export const useATCStream = (
         const serverLogs = (bufferedState.logs || []).map((log: any) => ({
           ...log,
           agentId: String(log.agentId || 'system'),
+          agentName: log.agentName || log.agentId,
           id: log.id || `server-${log.timestamp}-${Math.random()}`
         }));
 

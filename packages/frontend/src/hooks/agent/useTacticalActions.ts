@@ -7,7 +7,8 @@ import { Agent } from '@/contexts/atcTypes';
 export const useTacticalActions = () => {
     const { 
         agents, state, togglePause, 
-        submitRename, terminateAgent: apiTerminate, 
+        renameAgent: submitRename,
+        terminateAgent: apiTerminate, 
         togglePriority: apiTogglePriority, transferLock, 
         playClick, playAlert, toggleGlobalStop: apiToggleGlobalStop
     } = useATC();
@@ -51,7 +52,7 @@ export const useTacticalActions = () => {
             setRenamingId(null);
             setNewName('');
         } catch (err) {
-            // Error handling is managed in Provider
+            if (playAlert) playAlert();
         }
     }, [newName, agents, submitRename, playAlert, handleCancelRename]);
         

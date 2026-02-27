@@ -10,16 +10,18 @@ export const useCategorizedAgents = () => {
         const holderId = state.holder;
         const priorityIds = state.priorityAgents || [];
 
-        // 1. Master: 락 보유자
+        const naturalSort = (a: Agent, b: Agent) => 
+            a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' });
+
         const masterAgent = agents.find((a: Agent) => a.id === holderId) || null;
 
-        // 2. Priority Agents: 우선순위 목록에 있는 에이전트들
         const priorityAgents = priorityIds
             .map((id: string) => agents.find((a: Agent) => a.id === id))
             .filter((a): a is Agent => !!a);
 
-        // 3. Normal Agents: 우선순위가 아닌 모든 에이전트
-        const normalAgents = agents.filter((a: Agent) => !priorityIds.includes(a.id));
+        const normalAgents = agents
+            .filter((a: Agent) => !priorityIds.includes(a.id))
+            .sort(naturalSort);
 
         return {
             priorityAgents,

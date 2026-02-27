@@ -59,7 +59,7 @@ export const QueueDisplay = () => {
                                 }))}>
                                 <div className="flex items-center gap-2">
                                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    <span className="font-bold text-emerald-500">{masterAgent.id}</span>
+                                    <span className="font-bold text-emerald-500">{masterAgent.displayId || masterAgent.id}</span>
                                 </div>
                                 <Tooltip content="System Lock Active" position="left">
                                     <span className="text-[8px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold cursor-default">LOCK_HELD</span>
@@ -96,7 +96,7 @@ export const QueueDisplay = () => {
                                             isLocked: false, 
                                             isDark, 
                                             overrideSignal: state.overrideSignal
-                                        })}>{agent.id}</span>
+                                        })}>{agent.displayId || agent.id}</span>
                                     </div>
                                     <Star size={10} className="text-yellow-500 fill-current" />
                                 </div>
@@ -131,7 +131,7 @@ export const QueueDisplay = () => {
                                                 isLocked: false, 
                                                 isDark, 
                                                 overrideSignal: state.overrideSignal
-                                            })}>{agent.id}</span>
+                                            })}>{agent.displayId || agent.id}</span>
                                         </div>
                                         {agent.id === state.forcedCandidate && <Zap size={10} className="text-purple-500 animate-pulse" />}
                                     </div>

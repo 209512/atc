@@ -51,14 +51,14 @@ const request = async (url: string, options: RequestOptions = {}) => {
 
 export const atcApi = {
   toggleGlobalStop: (enable: boolean) => request('/stop', { method: 'POST', body: JSON.stringify({ enable }) }),
-  togglePause: (agentId: string, pause: boolean) => request(`/agents/${encodeURIComponent(agentId)}/pause`, { method: 'POST', body: JSON.stringify({ pause }) }),
-  togglePriority: (agentId: string, enable: boolean) => request(`/agents/${encodeURIComponent(agentId)}/priority`, { method: 'POST', body: JSON.stringify({ enable }) }),
+  togglePause: (uuid: string, pause: boolean) => request(`/agents/${encodeURIComponent(uuid)}/pause`, { method: 'POST', body: JSON.stringify({ pause }) }),
+  togglePriority: (uuid: string, enable: boolean) => request(`/agents/${encodeURIComponent(uuid)}/priority`, { method: 'POST', body: JSON.stringify({ enable }) }),
   updatePriorityOrder: (order: string[]) => request('/agents/priority-order', { method: 'POST', body: JSON.stringify({ order }) }),
-  transferLock: (agentId: string) => request(`/agents/${encodeURIComponent(agentId)}/transfer-lock`, { method: 'POST' }),
+  transferLock: (uuid: string) => request(`/agents/${encodeURIComponent(uuid)}/transfer-lock`, { method: 'POST' }),
   triggerOverride: () => request('/override', { method: 'POST' }),
   releaseLock: () => request('/release', { method: 'POST' }),
-  terminateAgent: (agentId: string) => request(`/agents/${encodeURIComponent(agentId)}`, { method: 'DELETE' }),
+  terminateAgent: (uuid: string) => request(`/agents/${encodeURIComponent(uuid)}`, { method: 'DELETE' }),
   scaleAgents: (count: number) => request('/agents/scale', { method: 'POST', body: JSON.stringify({ count }) }),
-  renameAgent: (oldId: string, newId: string) => request(`/agents/${encodeURIComponent(oldId)}/rename`, { method: 'POST', body: JSON.stringify({ newId }) }),
-  updateConfig: (agentId: string, config: any) => request(`/agents/${encodeURIComponent(agentId)}/config`, { method: 'POST', body: JSON.stringify({ config }) }),
+  renameAgent: (uuid: string, newName: string) => request(`/agents/${encodeURIComponent(uuid)}/rename`, { method: 'POST', body: JSON.stringify({ newName }) }),
+  updateConfig: (uuid: string, config: any) => request(`/agents/${encodeURIComponent(uuid)}/config`, { method: 'POST', body: JSON.stringify({ config }) }),
 };

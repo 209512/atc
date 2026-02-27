@@ -14,74 +14,53 @@
 
 ## 🚀 Key Features
 
-### 1. 3D Tactical Radar (Three.js)
+### 1. 3D Tactical Radar (Three.js / R3F)
 - **Real-time Visualization**: Agents are rendered as autonomous drones orbiting a central resource hub.
+- **Smart Camera System**: Auto-tracking with smooth interpolation (`lerp`) and seamless user interruption handling (OrbitControls sync).
 - **Visual Feedback**:
     - **Green Beam**: Active Lock Holder (Processing).
     - **Purple Pulse**: Force Seize / Hostile Takeover in progress.
     - **Red Pulse**: Paused / Suspended agents.
-- **Interactive Control**: Click any drone to inspect status, grant VIP access, or terminate.
 
 ### 2. Distributed Locking & Concurrency
-- **Hazelcast CP Subsystem**: Guarantees strong consistency for distributed locks (FencedLock).
-- **Priority Queueing**: Dynamic scheduling where VIP agents (Star badge) bypass standard waiting lists.
+- **Hazelcast CP Subsystem**: Guarantees strong consistency for distributed locks using the `FencedLock` mechanism.
+- **Priority Queueing**: Dynamic scheduling where VIP agents (Star badge) bypass standard waiting lists in the traffic flow.
 - **Force Transfer (Seize)**: Administrative capability to forcibly rip the lock from the current holder and assign it to a target candidate.
 
 ### 3. Live System Monitoring
-- **Sector Queue Panel**: Draggable HUD showing the live state of the "Priority Stack" vs "Standard Queue".
-- **Terminal Logs**: Real-time event streaming via SSE (Server-Sent Events) with "Tech" and "Standard" view modes.
-- **Audio Engine**: Custom `MasterGain` architecture with strict user-interaction policies (no ghost sounds).
+- **Sector Queue Panel**: Draggable HUD showing the live state of the **"Priority Stack"** vs **"Standard Queue"**.
+- **Terminal Logs**: Real-time event streaming via SSE (Server-Sent Events) with **Virtual Scrolling** for high-performance rendering of high-frequency logs.
+- **Audio Engine**: Custom `MasterGain` architecture providing immersive tactical sound feedback while respecting browser interaction policies.
 
 ### 4. Administrative "God-Mode"
-- **Emergency Override**: Instantly suspends all autonomous agents and grants the lock to the "Human-Operator".
-- **Global Stop**: One-click system freeze for immediate debugging or safety.
-- **Traffic Intensity**: Dynamic scaling of agent pool size (0-10) via slider controls.
+- **Emergency Override**: Instantly suspends all autonomous agents and grants the lock to the "Human-Operator" for manual intervention.
+- **Global Stop**: One-click system freeze to halt all distributed operations for immediate safety or debugging.
+- **Traffic Intensity**: Dynamic scaling of agent pool size via real-time slider controls.
 
 ---
 
 ## 🎬 Demo Scenarios
 
 ### Scenario 1: The Hostile Takeover (Force Seize)
-> **Objective**: Forcefully transfer control from a deadlock to a high-priority agent.
-
+> **Objective**: Forcefully transfer control from a deadlock or an underperforming agent to a target candidate.
 ![Demo Scenario 1](./demo_1.gif)
-
 1.  **Identify**: Locate the current Lock Holder (Green) in the **Radar** or **Queue Display**.
-2.  **Select**: Click a waiting agent (e.g., `Agent-2`) to open the Tactical Menu.
+2.  **Select**: Click any waiting agent (e.g., `agent-02`) to open the Tactical Menu.
 3.  **Execute**: Click the **SEIZE (Purple Zap)** button.
-4.  **Observe**:
-    - The target agent pulses **Purple** in the Radar.
-    - The **Queue Display** shows the target jumping to "Seizing" status.
-    - The Terminal Log reports: `📡 [CMD] SEIZE TARGET -> Agent-2`.
-    - Within seconds, `Agent-2` captures the lock.
+4.  **Observe**: The target agent pulses **Purple** and captures the lock, while logs report: `📡 [CMD] SEIZE TARGET -> agent-02`.
 
-### Scenario 2: VIP Fast-Track (Priority Queueing)
-> **Objective**: Grant VIP status to an agent to bypass the standard waitlist.
-
+### Scenario 2: VIP Fast-Track (Priority Injection)
+> **Objective**: Grant VIP status to an agent to bypass the standard rotation.
 ![Demo Scenario 2](./demo_2.gif)
+1.  **Grant**: Click the **Star (VIP)** icon on an agent in the **Standard Sector**.
+2.  **Result**: The agent immediately jumps to the **"Priority Stack"**. It bypasses all standard agents for the next available lock acquisition cycle.
 
-1.  **Monitor**: Observe the "Standard Queue" in the **Queue Display**.
-2.  **Grant**: Click the **Star (VIP)** icon on an agent at the bottom of the list.
-3.  **Result**:
-    - The agent immediately moves to the **"Priority Stack"** section.
-    - It bypasses all standard agents for the next lock acquisition cycle.
-    - Visual confirmation: Yellow Star badge appears on the drone and in the sidebar.
-
-### Scenario 3: Emergency Protocol (System Override)
-> **Objective**: Immediate manual intervention during a simulated failure.
-
+### Scenario 3: Autonomous Tracking (Tactical Focus)
+> **Objective**: Track a specific agent in the 3D space and seamlessly switch to manual control.
 ![Demo Scenario 3](./demo_3.gif)
-
-1.  **Trigger**: Click the **Emergency Override** button in the Sidebar Control Panel.
-2.  **Effect**:
-    - **Audio**: System-wide alert sound plays.
-    - **State**: All agents are forced into "Waiting" or "Paused".
-    - **Lock**: The `Human-Operator` acquires the lock indefinitely.
-    - **Logs**: `🚨 !!! ADMIN_OVERRIDE_ACTIVE !!!` appears in Critical Red.
-
-> **Technical Note on Distributed Consistency**: 
-> In this demo, you may observe logs of an agent acquiring the lock *after* the Override command. This is expected behavior in a distributed system (CAP Theorem). The `Human Override` command updates the central Policy Manager instantly, but agents in the middle of an atomic `FencedLock.tryLock()` operation must complete their transaction cycle to maintain data integrity before the new policy takes effect in the next tick. This demonstrates the system's commitment to **Strong Consistency** over immediate eventual availability.
-
+1. **Target**: Click any drone in the **Radar** view.
+2. **Track**: The camera smoothly zooms in and follows the moving drone (`lerp` interpolation).
+3. **Interrupt**: Drag the screen to manually control the view. The system instantly detects interaction and returns full control to the operator.
 
 ---
 
@@ -106,60 +85,64 @@ graph TD
         Agent <-->|"Acquire/Release"| CP["CP Subsystem (FencedLock)"]
         API <-->|Monitor| Maps[Distributed Maps]
     end
-```
 
-> **Note**: This system ensures **strong consistency** of distributed locks through the **Hazelcast CP Subsystem** running in a Dockerized environment.
+```
 
 ---
 
 ## 📦 Installation & Setup
 
 ### Prerequisites
-- Docker & Docker Compose
-- Node.js v18+ (for local development)
-- pnpm (recommended)
 
-### 🚀 Quick Start (Recommended)
-The fastest way to launch the backend infrastructure (API + Hazelcast Cluster) is via Docker Compose.
+* Docker & Docker Compose
+* Node.js v18+ (for local development)
+* pnpm (recommended)
+
+### 🚀 Quick Start (Full Stack via Docker)
+
+The most reliable way to launch the system including the Hazelcast CP cluster.
 
 ```bash
 # 1. Clone the repository
-git clone [https://github.com/209512/atc.git](https://github.com/209512/atc.git)
+git clone https://github.com/209512/atc.git
 cd atc
 
-# 2. Start Backend & Hazelcast
-docker-compose up --build
+# 2. Start all services
+docker compose up --build
+
 ```
-- **Backend API**: http://localhost:3000
-- **Hazelcast Server**: http://localhost:5701 (Cluster: dev)
-> **Note**: After starting the backend via Docker, please run the Frontend locally for the best development experience (see below).
+
+* **Frontend**: [http://localhost:5173](https://www.google.com/search?q=http://localhost:5173)
+* **Backend API**: [http://localhost:3000](https://www.google.com/search?q=http://localhost:3000)
+* **Hazelcast Server**: `localhost:5701` (Cluster: dev)
 
 ---
 
 ### 💻 Local Development (Frontend)
 
-Since the backend is running in Docker, you just need to launch the client.
+Use this for a faster development cycle with Hot Module Replacement (HMR).
 
 ```bash
-# In a new terminal
+# Ensure Backend is running via Docker first
 cd packages/frontend
 pnpm install
 pnpm run dev
+
 ```
-- **Frontend**: http://localhost:5173
 
 ---
 
 ## 🛠️ Technical Stack
 
 | Component | Technology | Description |
-|-----------|------------|-------------|
-| **Frontend** | React 18, Vite | Component-based UI architecture |
-| **Visualization** | Three.js, R3F | High-performance 3D rendering |
-| **Styling** | TailwindCSS | Utility-first responsive design |
-| **Backend** | Node.js, Express | Event-driven REST API |
+| --- | --- | --- |
+| **Frontend** | React 18, Vite | Modern component-based UI |
+| **Visualization** | Three.js, R3F | High-performance 3D drone radar |
+| **Styling** | TailwindCSS | Utility-first cyberpunk aesthetics |
+| **Backend** | Node.js, Express | Event-driven architecture |
 | **Persistence** | Hazelcast IMDG | In-memory distributed data grid |
-| **Streaming** | Server-Sent Events | Unidirectional real-time state updates |
+| **Consistency** | Hazelcast CP | Strong consistency for distributed locks |
+| **Streaming** | SSE | Real-time state updates |
 
 ---
 
@@ -167,17 +150,6 @@ pnpm run dev
 
 Copyright 2026 **209512**
 
-This project is licensed under the **Apache License 2.0**.  
-See the [LICENSE](./LICENSE) file for the full license text.
+Licensed under the **Apache License, Version 2.0**. See the [LICENSE](./LICENSE) file for details.
 
-> Licensed under the Apache License, Version 2.0 (the "License");
-> you may not use this file except in compliance with the License.
-> You may obtain a copy of the License at
-> 
->     http://www.apache.org/licenses/LICENSE-2.0
-> 
-> Unless required by applicable law or agreed to in writing, software
-> distributed under the License is distributed on an "AS IS" BASIS,
-> WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-> See the License for the specific language governing permissions and
-> limitations under the License.
+> **Technical Note on Consistency**: This system prioritizes **Safety and Consistency** over Availability during network partitions by utilizing the Hazelcast CP Subsystem. All lock operations are atomic and fenced to prevent "split-brain" scenarios in the distributed agent pool.

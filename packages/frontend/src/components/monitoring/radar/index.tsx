@@ -7,16 +7,14 @@ import clsx from 'clsx';
 import { useATC } from '@/hooks/system/useATC';
 import { useUI } from '@/hooks/system/useUI';
 import { UIContext } from '@/contexts/UIProvider'; 
-import { AgentDrone } from './AgentDrone';
-import { RadarLabels } from './RadarLabels';
-import { RadarBackground } from './RadarBackground';
-import { CentralHub } from './CentralHub';
-import { AgentDetailPopup } from './AgentDetailPopup';
-import { CameraController } from './CameraController';
+import { AgentDrone } from '@/components/monitoring/radar/AgentDrone';
+import { RadarBackground } from '@/components/monitoring/radar/RadarBackground';
+import { CentralHub } from '@/components/monitoring/radar/CentralHub';
+import { CameraController } from '@/components/monitoring/radar/CameraController';
 import { Agent } from '@/contexts/atcTypes';
 
 export const Radar: React.FC<{ compact?: boolean; isMainView?: boolean }> = ({ compact = false, isMainView = false }) => {
-    const { agents, state, togglePause, togglePriority, transferLock, terminateAgent } = useATC();
+    const { agents, state } = useATC();
     const uiValues = useUI();
     const { isDark, selectedAgentId, setSelectedAgentId } = uiValues;
 
@@ -24,9 +22,15 @@ export const Radar: React.FC<{ compact?: boolean; isMainView?: boolean }> = ({ c
         agents.find((a: Agent) => a.id === selectedAgentId), 
     [agents, selectedAgentId]);
 
-    const targetPos = useMemo(() => 
-        selectedAgent ? (selectedAgent.position as [number, number, number]) : null,
-    [selectedAgent]);
+    const isGloballyStopped = !!state?.globalStop;
+
+    const targetPos = useMemo(() => {
+        if (!selectedAgent) return null;
+        if (selectedAgent.status === 'paused' || selectedAgent.isPaused || isGloballyStopped) {
+            return null; 
+        }
+        return selectedAgent.position as [number, number, number];
+    }, [selectedAgent, isGloballyStopped]);
 
     return (
         <div className={clsx("w-full h-full relative overflow-hidden", isDark ? "bg-[#050505]" : "bg-[#f8fafc]")}>
@@ -49,24 +53,10 @@ export const Radar: React.FC<{ compact?: boolean; isMainView?: boolean }> = ({ c
                 </div>
             )}
 
-            <Canvas 
-                shadows 
-                gl={{ antialias: true, alpha: true }}
-                onPointerMissed={(e) => {
-                    if (e.button === 0) setSelectedAgentId(null);
-                }}
-            >
+            <Canvas shadows gl={{ antialias: true, alpha: true }} onPointerMissed={(e) => { if (e.button === 0) setSelectedAgentId(null); }}>
                 <UIContext.Provider value={uiValues}>
                     <PerspectiveCamera makeDefault position={[12, 12, 12]} fov={isMainView ? 45 : 60} />
-                    <OrbitControls 
-                        makeDefault 
-                        enableZoom={true} 
-                        enablePan={true} 
-                        maxDistance={60} 
-                        minDistance={3}
-                        enableDamping={true}
-                        dampingFactor={0.08}
-                    />
+                    <OrbitControls makeDefault enableZoom={true} enablePan={true} maxDistance={60} minDistance={3} enableDamping={true} dampingFactor={0.08} />
                     
                     <CameraController targetPosition={targetPos} />
                     <ambientLight intensity={isDark ? 0.4 : 0.8} />
@@ -79,6 +69,7 @@ export const Radar: React.FC<{ compact?: boolean; isMainView?: boolean }> = ({ c
                             isOverride={!!state?.overrideSignal} 
                             holder={state?.holder || null} 
                             isDark={isDark} 
+                            agents={agents} 
                         />
                         
                         {agents.map((agent: Agent) => (
@@ -87,29 +78,13 @@ export const Radar: React.FC<{ compact?: boolean; isMainView?: boolean }> = ({ c
                                 id={agent.id}
                                 position={agent.position as [number, number, number]}
                                 isLocked={state?.holder === agent.id}
-                                isOverride={state.overrideSignal}
+                                isOverride={!!state?.overrideSignal}
                                 color={agent.color || '#3b82f6'}
                                 onClick={(id) => setSelectedAgentId(id)}
                                 isPaused={agent.status === 'paused' || agent.isPaused === true || !!state?.globalStop}
                                 isPriority={!!agent.priority}
                             />
                         ))}
-                        
-                        <RadarLabels />
-
-                        {selectedAgent && (
-                            <AgentDetailPopup 
-                                agent={selectedAgent}
-                                position={selectedAgent.position as [number, number, number]}
-                                onClose={() => setSelectedAgentId(null)}
-                                isDark={isDark}
-                                onTerminate={terminateAgent}
-                                onTogglePriority={togglePriority}
-                                onTransferLock={transferLock}
-                                onTogglePause={togglePause}
-                                isCompact={compact}
-                            />
-                        )}
                     </Suspense>
                 </UIContext.Provider>
             </Canvas>

@@ -11,7 +11,7 @@ import { Tooltip } from '@/components/common/Tooltip';
 
 export const TacticalPanel = () => {
     const { isDark, sidebarWidth, globalStop, toggleGlobalStop, agents } = useTacticalActions();
-    const { priorityAgents } = useCategorizedAgents();
+    const { priorityAgents, normalAgents } = useCategorizedAgents();
     
     const [isOpen, setIsOpen] = useState(true);
     const [filterMode, setFilterMode] = useState<'all' | 'priority'>('all');
@@ -24,9 +24,13 @@ export const TacticalPanel = () => {
     }, [agents, globalStop]);
 
     const sortedTacticalList = useMemo(() => {
-        const source = filterMode === 'priority' ? priorityAgents : agents;
-        return [...source].sort((a, b) => a.id.localeCompare(b.id));
-    }, [priorityAgents, agents, filterMode]);
+        if (filterMode === 'priority') return priorityAgents;
+
+        return [...agents].sort((a, b) => 
+            (a.displayId || a.id).localeCompare(b.displayId || b.id, undefined, { numeric: true })
+        );
+        
+    }, [priorityAgents, normalAgents, filterMode, agents]);
 
     return (
         <Draggable nodeRef={nodeRef} handle=".tactical-handle" bounds="body">
