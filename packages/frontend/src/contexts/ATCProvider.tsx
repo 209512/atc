@@ -5,6 +5,7 @@ import { useATCStream } from '@/hooks/system/useATCStream';
 import { atcApi } from '@/contexts/atcApi';
 import { useAudio } from '@/hooks/system/useAudio';
 import { Agent, ATCState } from '@/contexts/atcTypes';
+import { LOG_LEVELS } from '@/utils/logStyles';
 
 export interface ATCContextType {
   state: ATCState;
@@ -43,7 +44,7 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     atcApi.scaleAgents(state.trafficIntensity).catch(err => {
-      addLog(`[SYSTEM] API_CONNECT_FAIL: ${err.message}`, 'critical');
+      addLog(`API_CONNECT_FAIL: ${err.message}`, 'critical');
     });
   }, []);
 
@@ -65,7 +66,7 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           })
           .catch(err => {
               playAlert();
-              addLog(`[SYSTEM] SCALE_FAILED: ${err.message}`, 'error');
+              addLog(`SCALE_FAILED: ${err.message}`, 'error');
               setState(prev => ({ ...prev, trafficIntensity: prevIntensity }));
           });
     }
@@ -79,10 +80,10 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     atcApi.togglePause(uuid, paused).catch(err => {
         playAlert();
-        addLog(`[${uuid}] PAUSE_FAILED: ${err.message}`, 'error');
+        addLog(`PAUSE_FAILED: ${err.message}`, 'error', uuid);
         markAction(uuid, 'status', null);
     });
-    addLog(`[${paused ? '⏸️ SUSPENDED' : '▶️ RESUMED'}]`, 'info', uuid);
+    addLog(paused ? 'SUSPENDED' : 'RESUMED', 'system', uuid);
   }, [setAgents, addLog, markAction, playClick, playAlert]);
 
   const togglePriority = useCallback((uuid: string, priority: boolean) => {
@@ -90,10 +91,10 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     markAction(uuid, 'priority', priority);
     setAgents(prev => prev.map(a => a.id === uuid ? { ...a, priority } : a));
     
-    addLog(`[${priority ? '⭐ PRIORITY_SET' : '⭐ PRIORITY_REMOVED'}]`, priority ? 'success' : 'info', uuid);
+    addLog(priority ? 'PRIORITY_SET' : 'PRIORITY_REMOVED', priority ? 'warn' : 'info', uuid);
     atcApi.togglePriority(uuid, priority).catch(err => {
         playAlert();
-        addLog(`[${uuid}] PRIORITY_FAILED: ${err.message}`, 'error');
+        addLog(`PRIORITY_FAILED: ${err.message}`, 'error', uuid);
         markAction(uuid, 'priority', !priority);
     });
   }, [setAgents, markAction, addLog, playClick, playSuccess, playAlert]);
@@ -101,7 +102,7 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const terminateAgent = useCallback((uuid: string) => {
     if (agents.length <= 1) {
         playAlert();
-        addLog(`[SYSTEM] TERMINATION DENIED: MINIMUM 1 AGENT REQUIRED`, 'error');
+        addLog(`TERMINATION DENIED: MINIMUM 1 AGENT REQUIRED`, 'error');
         return;
     }
     playClick();
@@ -109,7 +110,7 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     const prevAgents = [...agents];
     setAgents(prev => prev.filter(a => a.id !== uuid));
-    addLog(`[${uuid}] 💀 TERMINATING`, 'error');
+    addLog(`TERMINATING`, 'error', uuid);
     
     atcApi.terminateAgent(uuid)
       .then(() => {
@@ -117,7 +118,7 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
       .catch(err => {
           playAlert();
-          addLog(`[${uuid}] TERMINATE_FAILED: ${err.message}`, 'error');
+          addLog(`TERMINATE_FAILED: ${err.message}`, 'error', uuid);
           setAgents(prevAgents);
       });
   }, [agents, setAgents, setState, addLog, markAction, playClick, playAlert]);
@@ -126,10 +127,10 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     playAlert();
     markAction(uuid, 'forcedCandidate', uuid);
     setState(prev => ({ ...prev, forcedCandidate: uuid }));
-    addLog(`[⚡ FORCE_TRANSFER_INITIATED]`, 'critical', uuid);
+    addLog(`FORCE_TRANSFER_INITIATED`, 'system', uuid);
     
     atcApi.transferLock(uuid).catch(err => {
-        addLog(`[${uuid}] TRANSFER_FAILED: ${err.message}`, 'error');
+        addLog(`TRANSFER_FAILED: ${err.message}`, 'error', uuid);
         setState(prev => ({ ...prev, forcedCandidate: null }));
     });
   }, [setState, addLog, markAction, playAlert]);
@@ -139,10 +140,10 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const nextStop = !state.globalStop;
     markAction('', 'globalStop', nextStop);
     setState(prev => ({ ...prev, globalStop: nextStop }));
-    addLog(`[SYSTEM] ${nextStop ? '🚫 GLOBAL_STOP_ENGAGED' : '▶️ SYSTEM_RELEASED'}`, 'system');
+    addLog(nextStop ? 'GLOBAL_STOP_ENGAGED' : 'SYSTEM_RELEASED', 'system');
     
     atcApi.toggleGlobalStop(nextStop).catch(err => {
-        addLog(`[SYSTEM] GLOBAL_STOP_FAILED: ${err.message}`, 'error');
+        addLog(`GLOBAL_STOP_FAILED: ${err.message}`, 'error');
         setState(prev => ({ ...prev, globalStop: !nextStop }));
     });
   }, [state.globalStop, setState, markAction, addLog, playAlert]);
@@ -151,10 +152,10 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     playAlert();
     markAction('', 'overrideSignal', true);
     setState(prev => ({ ...prev, overrideSignal: true, holder: 'Human-Operator' }));
-    addLog("🚨 [SYSTEM] EMERGENCY OVERRIDE", "critical");
+    addLog("EMERGENCY OVERRIDE", 'critical');
     
     return atcApi.triggerOverride().catch(err => {
-        addLog(`[SYSTEM] OVERRIDE_FAILED: ${err.message}`, 'error');
+        addLog(`OVERRIDE_FAILED: ${err.message}`, 'error');
         setState(prev => ({ ...prev, overrideSignal: false, holder: null }));
     });
   }, [playAlert, markAction, setState, addLog]);
@@ -163,20 +164,20 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     playSuccess();
     markAction('', 'overrideSignal', false);
     setState(prev => ({ ...prev, overrideSignal: false, holder: null }));
-    addLog("✅ [SYSTEM] OVERRIDE RELEASED", "info");
+    addLog("OVERRIDE RELEASED", 'info');
     
     return atcApi.releaseLock().catch(err => {
-        addLog(`[SYSTEM] RELEASE_FAILED: ${err.message}`, 'error');
+        addLog(`RELEASE_FAILED: ${err.message}`, 'error');
         setState(prev => ({ ...prev, overrideSignal: true, holder: 'Human-Operator' }));
     });
   }, [playSuccess, markAction, setState, addLog]);
 
   const updateAgentConfig = useCallback((uuid: string, config: any) => {
       setAgents(prev => prev.map(a => a.id === uuid ? { ...a, ...config } : a));
-      addLog(`[${uuid}] ⚙️ CONFIG_UPDATED`, 'success', uuid);
+      addLog(`CONFIG_UPDATED`, 'success', uuid);
       
       atcApi.updateConfig(uuid, config).catch(err => 
-          addLog(`[${uuid}] CONFIG_FAILED: ${err.message}`, 'error')
+          addLog(`CONFIG_FAILED: ${err.message}`, 'error', uuid)
       );
   }, [setAgents, addLog]);
 
@@ -188,18 +189,18 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updatePriorityOrder: (newOrder: string[]) => {
         markAction('', 'priorityAgents', newOrder);
         setState(prev => ({ ...prev, priorityAgents: newOrder }));
-        atcApi.updatePriorityOrder(newOrder).catch(err => addLog(`[SYSTEM] ORDER_FAILED: ${err.message}`, 'error'));
+        atcApi.updatePriorityOrder(newOrder).catch(err => addLog(`ORDER_FAILED: ${err.message}`, 'error'));
     },
     renameAgent: async (uuid: string, newName: string) => {
         if (!newName) return;
         markAction(uuid, 'rename', newName);
-        addLog(`[SYSTEM] Requesting callsign change: ${newName}`, 'info', uuid);
+        addLog(`CALLSIGN_UPDATE: ${newName}`, 'system', uuid); 
         try {
             await atcApi.renameAgent(uuid, newName);
-            playSuccess();
+            playSuccess(); 
         } catch (err: any) {
             playAlert();
-            addLog(`[${uuid}] RENAME_FAILED: ${err.message}`, 'error');
+            addLog(`RENAME_FAILED: ${err.message}`, 'error', uuid);
             markAction(uuid, 'rename', null);
             throw err;
         }

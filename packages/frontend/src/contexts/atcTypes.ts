@@ -1,12 +1,14 @@
 // src/contexts/atcTypes.ts
+import { LogType } from '@/utils/logStyles';
+
 export interface LogEntry {
   id: string;
-  agentId: string;
+  agentId?: string;
   message: string;
   messageStd?: string;
   messageTech?: string;
   timestamp: Date | number;
-  type: 'info' | 'error' | 'success' | 'system' | 'warn' | 'critical' | 'CRITICAL';
+  type: LogType;
 }
 
 export interface Agent {

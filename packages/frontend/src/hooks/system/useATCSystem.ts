@@ -21,9 +21,9 @@ export const useATCSystem = () => {
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info', agentId: string = 'SYSTEM') => {
     const newLog: LogEntry = { 
-      id: `local-manual-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`, 
+      id: `ui-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`, 
       agentId, 
-      message, 
+      message: message.toUpperCase(),
       timestamp: Date.now(), 
       type 
     };

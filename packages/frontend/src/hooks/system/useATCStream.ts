@@ -7,6 +7,7 @@ const STREAM_URL = env?.VITE_API_URL
   ? `${env.VITE_API_URL}/stream` 
   : 'http://localhost:3000/api/stream';
 
+
 const getSpiralPos = (i: number): [number, number, number] => {
   const r = 2.5 * Math.sqrt(i + 1);
   const theta = i * 137.508 * (Math.PI / 180);
@@ -32,7 +33,7 @@ export const useATCStream = (
 
     if (bufferedAgents) {
       setAgents((prevAgents) => {
-        const processed = bufferedAgents.map((agent: any, i: number) => {
+        return bufferedAgents.map((agent: any, i: number) => {
           const originalId = String(agent.id);
           
           if (deletedIds.current.has(originalId)) {
@@ -52,7 +53,6 @@ export const useATCStream = (
 
           const rawPos = finalAgent.position;
           const prevAgent = prevAgents.find(a => a.id === originalId);
-          
           const validPosition = (Array.isArray(rawPos) && rawPos.length === 3) 
             ? (rawPos as [number, number, number]) 
             : (prevAgent?.position || getSpiralPos(i)); 
@@ -66,50 +66,30 @@ export const useATCStream = (
             position: validPosition
           };
         }).filter(Boolean) as Agent[];
-
-        return processed.sort((a, b) => (a.displayId || '').localeCompare(b.displayId || '', undefined, { numeric: true }));
       });
       dataBuffer.current.agents = null;
     }
 
     if (bufferedState) {
       setState((prev) => {
-        const currentHolder = bufferedState.holder ? String(bufferedState.holder) : null;
-        const forcedCandidate = bufferedState.forcedCandidate ? String(bufferedState.forcedCandidate) : null;
-
-        if (currentHolder && lastHolderRef.current !== currentHolder && currentHolder !== 'Human-Operator') {
-          const isTransfer = forcedCandidate === currentHolder;
-          const newAutoLog = {
-            id: `local-auto-${currentHolder}-${now}`,
-            timestamp: now,
-            agentId: currentHolder,
-            message: isTransfer 
-              ? `LOCK ACQUIRED (MANUAL TRANSFER)` 
-              : `ACQUIRED AUTONOMOUS LOCK`,
-            type: 'success'
-          };
-          localPersistentLogs.current.push(newAutoLog);
-          if (localPersistentLogs.current.length > 50) localPersistentLogs.current.shift();
-        }
-        lastHolderRef.current = currentHolder;
-
-        const serverLogs = (bufferedState.logs || []).map((log: any) => ({
+        const newServerLogs = (bufferedState.logs || []).map((log: any) => ({
           ...log,
           agentId: String(log.agentId || 'system'),
-          agentName: log.agentName || log.agentId,
-          id: log.id || `server-${log.timestamp}-${Math.random()}`
+          id: log.id || `S-${log.timestamp}`
         }));
 
-        const uniqueLogsMap = new Map();
-        [...prev.logs, ...serverLogs, ...localPersistentLogs.current].forEach(log => {
-          uniqueLogsMap.set(log.id, log);
-        });
+        const MAX_LOGS = 100; 
+        const localLogs = prev.logs.filter(l => String(l.id).startsWith('ui-'));
+        
+        const combined = [...newServerLogs, ...localLogs];
+        const uniqueMap = new Map();
+        combined.forEach(l => uniqueMap.set(l.id, l));
 
-        const combinedLogs = Array.from(uniqueLogsMap.values())
-          .sort((a, b) => Number(a.timestamp) - Number(b.timestamp)) 
-          .slice(-200);
+        const sortedLogs = Array.from(uniqueMap.values())
+          .sort((a, b) => Number(a.timestamp) - Number(b.timestamp))
+          .slice(-MAX_LOGS);
 
-        return { ...prev, ...bufferedState, logs: combinedLogs };
+        return { ...prev, ...bufferedState, logs: sortedLogs };
       });
       dataBuffer.current.state = null;
     }
