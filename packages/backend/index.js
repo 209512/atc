@@ -137,6 +137,20 @@ app.post('/api/agents/:uuid/config', (req, res) => {
     res.json({ success: true, message: `Updated config for agent` });
 });
 
+app.get('/api/agents/:uuid/config', (req, res) => {
+    const { uuid } = req.params;
+    const config = atcService.agentConfigs.get(uuid);
+
+    if (!config) {
+        return res.json({
+            provider: 'mock',
+            model: '',
+            systemPrompt: 'You are a helpful AI traffic controller.'
+        });
+    }
+    res.json(config);
+});
+
 atcService.init()
   .then(() => {
     console.log('✅ System Initialized. Starting Web Server...');

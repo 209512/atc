@@ -95,7 +95,9 @@ class Agent {
               await this.updateStatus(CONSTANTS.STATUS_PAUSED, CONSTANTS.RESOURCE_NONE, isGlobalStopped ? "GLOBAL_HALT" : "SUSPENDED");
               
               if (this.currentLock && this.currentFence) {
-                  try { await this.currentLock.unlock(this.currentFence); } catch (e) {}
+                  try { 
+                      await this.currentLock.unlock(this.currentFence); 
+                  } catch (e) {}
                   this.currentLock = null;
                   this.currentFence = null;
                   this.emitReleased(this.uuid);
@@ -115,6 +117,7 @@ class Agent {
           const canAcquire = await this.eventBus.canAgentAcquire(this.uuid);
           
           if (!isTarget && !canAcquire) {
+              this.eventBus.emit('agent-waiting', { id: this.uuid });
               await this.updateStatus(CONSTANTS.STATUS_WAITING, CONSTANTS.RESOURCE_NONE, "WAITING");
               await new Promise(r => setTimeout(r, 500));
               continue;
@@ -122,7 +125,11 @@ class Agent {
 
           const pList = this.eventBus.state.priorityAgents || [];
           const rank = pList.indexOf(this.uuid);
-          const delay = isTarget ? 0 : (rank !== -1 ? rank * CONSTANTS.PRIORITY_RANK_DELAY : (pList.length * CONSTANTS.NORMAL_BASE_DELAY + Math.random() * 200));
+          let delay = isTarget ? 0 : (rank !== -1 ? rank * CONSTANTS.PRIORITY_RANK_DELAY : (pList.length * CONSTANTS.NORMAL_BASE_DELAY + Math.random() * 200));
+
+          if (!isTarget && this.eventBus.state.forcedCandidate) {
+              delay += 1000;
+          }
           await new Promise(r => setTimeout(r, delay));
 
           const currentResourceId = this.eventBus.state.resourceId;
@@ -142,8 +149,10 @@ class Agent {
     
             await this.executeTask(isTarget);
 
-            if (this.isRunning) {
-                try { await lock.unlock(acquiredFence); } catch (e) {}
+            if (this.isRunning && this.eventBus.state.resourceId === currentResourceId) {
+                try { 
+                    await lock.unlock(this.currentFence); 
+                } catch (e) {}
             }
 
             this.currentLock = null;
@@ -152,6 +161,7 @@ class Agent {
             await this.updateStatus(CONSTANTS.STATUS_IDLE, CONSTANTS.RESOURCE_NONE, "IDLE");
             await new Promise(r => setTimeout(r, 500));   
           } else {
+            this.eventBus.emit('agent-waiting', { id: this.uuid });
             await new Promise(r => setTimeout(r, 200));
           }
         } catch (err) {
@@ -189,9 +199,7 @@ class Agent {
                   position: position, 
                   lastUpdated: now
               });
-          } catch (e) {
-              console.error(`[${this.id}] Status Update Failed:`, e.message);
-          }
+          } catch (e) {}
       }
   }
   
@@ -205,7 +213,7 @@ class Agent {
     await new Promise(r => setTimeout(r, 1000)); 
     if (isTarget) {
       this.eventBus.state.forcedCandidate = null;
-      this.eventBus.state.resourceId = `lock-${Date.now()}`;
+      this.eventBus.lockDirector.refreshResourceId();
       this.eventBus.emitState();
     }
   }
@@ -216,7 +224,7 @@ class Agent {
     try {
         if (this.statusMap) await this.statusMap.remove(this.uuid);
         if (this.currentLock && this.currentFence) {
-            await this.currentLock.unlock(this.currentFence);
+            await this.currentLock.unlock(this.currentFence).catch(() => {});
         }
     } catch (e) {}
   }  

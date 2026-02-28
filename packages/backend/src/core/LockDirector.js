@@ -15,19 +15,14 @@ class LockDirector {
 
     async humanOverride() {
         console.log('🚨 [Admin] Initiating Emergency Administrative Override...');
+        
+        this.refreshResourceId();
+
         this.atcService.state.overrideSignal = true;
         this.atcService.state.forcedCandidate = null; 
         this.atcService.state.holder = 'Human (Admin)';
         
         this.atcService.emitState();
-
-        try {
-            const cp = hazelcastManager.getClient().getCPSubsystem();
-            const lock = await cp.getLock(this.atcService.state.resourceId);
-            await lock.unlock().catch(() => {}); 
-        } catch (e) {
-            console.error('Director: Human override unlock failed', e.message);
-        }
         
         return { success: true };
     }
@@ -39,12 +34,6 @@ class LockDirector {
         this.atcService.state.holder = null;
         this.atcService.state.fencingToken = null;
         this.atcService.state.forcedCandidate = null;
-
-        try {
-            const cp = hazelcastManager.getClient().getCPSubsystem();
-            const lock = await cp.getLock(this.atcService.state.resourceId);
-            await lock.unlock().catch(() => {});
-        } catch (e) {}
 
         this.refreshResourceId();
 
@@ -75,16 +64,9 @@ class LockDirector {
         this.atcService.state.forcedCandidate = targetId;
         this.atcService.state.holder = null; 
 
-        const oldResourceId = this.atcService.state.resourceId;
         this.refreshResourceId();
         
         this.atcService.emitState(); 
-
-        try {
-            const cp = hazelcastManager.getClient().getCPSubsystem();
-            const oldLock = await cp.getLock(oldResourceId);
-            await oldLock.unlock().catch(() => {}); 
-        } catch (e) {}
 
         this.transferTimeoutRef = setTimeout(() => {
             if (this.atcService.state.forcedCandidate === targetId) {

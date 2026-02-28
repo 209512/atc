@@ -17,8 +17,8 @@ class PolicyManager {
             return agentId === 'Human (Admin)'; 
         }
 
-        if (state.forcedCandidate) {
-            return state.forcedCandidate === agentId;
+        if (state.forcedCandidate === agentId || state.holder === agentId) {
+            return true;
         }
 
         if (state.priorityAgents && state.priorityAgents.length > 0) {

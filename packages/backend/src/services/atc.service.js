@@ -64,11 +64,11 @@ class ATCService extends EventEmitter {
     addLog(agentId, message, type = 'info') {
         const colors = { 
             info: '\x1b[36m', success: '\x1b[32m', warn: '\x1b[33m', 
-            critical: '\x1b[31m', system: '\x1b[35m', lock: '\x1b[32;1m' 
+            critical: '\x1b[31m', system: '\x1b[35m', lock: '\x1b[32;1m', policy: '\x1b[34m' 
         };
 
         const agent = this.agents.get(agentId);
-        const displayName = agent ? agent.id : (agentId === 'SYSTEM' ? 'SYSTEM' : agentId);
+        const displayName = agent ? agent.id : (['SYSTEM', 'POLICY', 'NETWORK', 'ADMIN'].includes(agentId) ? agentId : agentId);
         console.log(`${colors[type] || ''}[${displayName}]\x1b[0m ${message}`);
 
         const logEntry = {
@@ -80,11 +80,8 @@ class ATCService extends EventEmitter {
             type
         };
 
-        this.state.logs.push(logEntry);
+        this.state.logs = [...(this.state.logs || []), logEntry].slice(-200);
         
-        if (this.state.logs.length > 200) {
-            this.state.logs = this.state.logs.slice(-200);
-        }
         this.emitState();
     }
 
@@ -211,12 +208,30 @@ class ATCService extends EventEmitter {
     handlePriorityCollision() {
         this.state.collisionCount++;
         this.state.priorityCollisionTrigger = Date.now();
-        this.addLog('POLICY', `🚨 Priority contention occurred!`, 'critical');
+        this.addLog('POLICY', `🚨 Priority Contention`, 'policy');
         this.emitState();
     }
 
     handleAgentWaiting({ id }) {
         const uuid = id;
+        const currentHolder = this.state.holder;
+        const pList = this.state.priorityAgents || [];
+
+        if (currentHolder && currentHolder !== uuid) {
+            const holderAgent = this.agents.get(currentHolder);
+            const holderName = holderAgent ? holderAgent.id : (currentHolder === 'Human (Admin)' ? 'ADMIN' : currentHolder);
+
+            if (pList.includes(currentHolder) && !pList.includes(uuid)) {
+                this.addLog(uuid, `🚫 BLOCKED_BY: [${holderName}]`, 'policy');
+                this.handlePriorityCollision();
+            } 
+            else {
+                if (!(this.state.waitingAgents || []).includes(uuid)) {
+                   this.addLog(uuid, `⚔️ WAIT_FOR: [${holderName}]`, 'warn');
+                }
+            }
+        }
+
         if (!(this.state.waitingAgents || []).includes(uuid)) {
             this.addLog(uuid, `⏳ Waiting in queue...`, 'info');
             if (!this.state.waitingAgents) this.state.waitingAgents = [];

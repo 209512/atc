@@ -116,7 +116,6 @@ export const AgentCard = ({
                     </span>
                 </div>
 
-                {/* Details */}
                 <AnimatePresence>
                     {isSelected && (
                         <motion.div 
