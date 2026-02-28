@@ -9,6 +9,7 @@ import { useATC } from '@/hooks/system/useATC';
 import { useUI } from '@/hooks/system/useUI';
 import { useAudio } from '@/hooks/system/useAudio';
 import { AgentDetailPopup } from '@/components/monitoring/radar/AgentDetailPopup';
+import { LOG_LEVELS } from '@/utils/logStyles';
 
 interface AgentDroneProps {
     id: string;
@@ -90,11 +91,16 @@ export const AgentDrone = ({
         }
     });
 
-    const coreColor = isOverride ? (isDark ? "#ef4444" : "#b91c1c") : 
-                     isForced ? (isDark ? "#BC6FF1" : "#8B5CF6") : 
-                     isLocked ? '#10b981' : 
-                     (isPaused || isGlobalStopped) ? (isDark ? '#94a3b8' : '#64748b') :
-                     isPriority ? (isDark ? "#f59e0b" : "#d97706") : color;
+    const coreColor = useMemo(() => {
+        if (isOverride) return LOG_LEVELS.critical.color;
+        if (isPaused || isGlobalStopped) return isDark ? '#64748b' : '#94a3b8'; 
+        
+        if (isForced) return LOG_LEVELS.system.color;
+        if (isLocked) return LOG_LEVELS.success.color;
+        if (isPriority) return LOG_LEVELS.warn.color;
+        
+        return color;
+    }, [isOverride, isPaused, isGlobalStopped, isForced, isLocked, isPriority, color, isDark]);
 
     return (
         <>
@@ -110,17 +116,22 @@ export const AgentDrone = ({
             )}
 
             <group ref={groupRef}>
-                <mesh onClick={(e) => { e.stopPropagation(); onClick(id); }}>
+                {/* [클릭 영역] 투명 히트박스 */}
+                <mesh onClick={(e) => { 
+                    e.stopPropagation(); 
+                    onClick(id); 
+                }}>
                     <sphereGeometry args={[1.5, 8, 8]} />
                     <meshBasicMaterial transparent opacity={0} />
                 </mesh>
 
+                {/* 기체 가시화 */}
                 <mesh>
                     <octahedronGeometry args={[0.5, 0]} />
                     <meshStandardMaterial 
                         color={coreColor} 
                         emissive={coreColor} 
-                        emissiveIntensity={(isPaused || isGlobalStopped) ? 0.5 : 1.5} 
+                        emissiveIntensity={(isPaused || isGlobalStopped) ? 0.3 : 1.5} 
                         wireframe 
                     />
                 </mesh>
@@ -131,22 +142,27 @@ export const AgentDrone = ({
                     isPriority={isPriority} isOverride={isOverride}
                 />
 
+                {/* 레이더 팝업창 */}
                 {isSelected && agentData && (
                     <AgentDetailPopup 
-                        agent={agentData} position={[0, 0, 0]} 
-                        onClose={() => setSelectedAgentId(null)} isDark={isDark}
-                        onTerminate={terminateAgent} onTogglePriority={togglePriority}
-                        onTransferLock={transferLock} onTogglePause={togglePause}
+                        agent={agentData} 
+                        position={[0, 0, 0]} 
+                        onClose={() => setSelectedAgentId(null)} 
+                        isDark={isDark}
+                        onTerminate={terminateAgent} 
+                        onTogglePriority={togglePriority}
+                        onTransferLock={transferLock} 
+                        onTogglePause={togglePause}
                     />
                 )}
-
+                
                 {(isLocked || isForced) && !isGlobalStopped && (
                     <DreiLine 
                         points={[[0, 0, 0], [-currentPos.current.x, -currentPos.current.y, -currentPos.current.z]]} 
                         color={coreColor} 
-                        lineWidth={1.2} 
-                        transparent 
-                        opacity={0.4} 
+                        lineWidth={1.2}
+                        transparent
+                        opacity={0.4}
                     />
                 )}
             </group>
@@ -162,11 +178,11 @@ const DroneLabel = ({ displayId, isDark, isLocked, isSelected, isPaused, isPrior
             isLocked && !isPaused && !isOverride && (isDark ? "bg-emerald-500/20 border-emerald-500 text-emerald-500" : "bg-emerald-50 border-emerald-500 text-emerald-600"),
             isOverride && "bg-red-500/20 border-red-500 text-red-500 animate-pulse",
             isSelected && "ring-1 ring-blue-500/50 scale-110 z-30",
-            isPaused && (isDark ? "opacity-80 border-gray-500 bg-gray-900/50" : "opacity-50 grayscale")
+            isPaused && (isDark ? "opacity-60 border-slate-600 bg-slate-900/50" : "opacity-50 grayscale")
         )}>
             {isPriority && !isOverride && <Star size={8} className={clsx("fill-current", isDark ? "text-yellow-500" : "text-amber-500")} />}
-            {isPaused && <Pause size={7} className="fill-current text-gray-300" />}
-            <span className={clsx(isPaused && "line-through decoration-1 opacity-90 text-gray-300")}>
+            {isPaused && <Pause size={7} className="fill-current text-slate-400" />}
+            <span className={clsx(isPaused && "line-through decoration-1 opacity-70 text-slate-400")}>
                 {isOverride ? `OVERRIDING...` : (isPaused ? `[P] ${displayId}` : displayId)}
             </span>
         </div>

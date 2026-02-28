@@ -1,5 +1,5 @@
 // src/components/monitoring/radar/index.tsx
-import React, { Suspense, useMemo } from 'react';
+import React, { Suspense, useMemo, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { MousePointer2, Move, ZoomIn } from 'lucide-react';
@@ -24,6 +24,13 @@ export const Radar: React.FC<{ compact?: boolean; isMainView?: boolean }> = ({ c
 
     const isGloballyStopped = !!state?.globalStop;
 
+    const handleCreated = useCallback(({ gl }: any) => {
+        gl.domElement.addEventListener('webglcontextlost', (event: any) => {
+            event.preventDefault();
+            console.warn("[ATC_SYSTEM] WebGL Context Lost. Attempting auto-recovery...");
+        }, false);
+    }, []);
+
     const targetPos = useMemo(() => {
         if (!selectedAgent) return null;
         if (selectedAgent.status === 'paused' || selectedAgent.isPaused || isGloballyStopped) {
@@ -33,10 +40,16 @@ export const Radar: React.FC<{ compact?: boolean; isMainView?: boolean }> = ({ c
     }, [selectedAgent, isGloballyStopped]);
 
     return (
-        <div className={clsx("w-full h-full relative overflow-hidden", isDark ? "bg-[#050505]" : "bg-[#f8fafc]")}>
+        <div 
+            className="w-full h-full relative overflow-hidden transition-colors duration-500" 
+            style={{ backgroundColor: isDark ? "#050505" : "#f8fafc" }}
+        >
             {!compact && (
                 <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 pointer-events-none">
-                    <div className={clsx("flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md text-[9px] font-mono font-bold", isDark ? "bg-black/40 border-white/10 text-white/60" : "bg-white/60 border-black/5 text-black/60")}>
+                    <div className={clsx(
+                        "flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md text-[9px] font-mono font-bold transition-all duration-300", 
+                        isDark ? "bg-black/40 border-white/10 text-white/60" : "bg-white/60 border-black/5 text-black/60"
+                    )}>
                         <div className="flex items-center gap-1.5 border-r border-current pr-2">
                             <MousePointer2 size={10} className="text-blue-500" />
                             <span>L-CLICK: SELECT</span>
@@ -53,12 +66,25 @@ export const Radar: React.FC<{ compact?: boolean; isMainView?: boolean }> = ({ c
                 </div>
             )}
 
-            <Canvas shadows gl={{ antialias: true, alpha: true }} onPointerMissed={(e) => { if (e.button === 0) setSelectedAgentId(null); }}>
+            <Canvas 
+                shadows 
+                onCreated={handleCreated}
+                gl={{ 
+                    antialias: false,
+                    alpha: true,
+                    powerPreference: "high-performance",
+                    preserveDrawingBuffer: false,
+                    stencil: false
+                }} 
+                dpr={1}
+                onPointerMissed={(e) => { if (e.button === 0) setSelectedAgentId(null); }}
+            >
                 <UIContext.Provider value={uiValues}>
                     <PerspectiveCamera makeDefault position={[12, 12, 12]} fov={isMainView ? 45 : 60} />
                     <OrbitControls makeDefault enableZoom={true} enablePan={true} maxDistance={60} minDistance={3} enableDamping={true} dampingFactor={0.08} />
                     
                     <CameraController targetPosition={targetPos} />
+
                     <ambientLight intensity={isDark ? 0.4 : 0.8} />
                     <pointLight position={[10, 15, 10]} intensity={1.5} />
                     

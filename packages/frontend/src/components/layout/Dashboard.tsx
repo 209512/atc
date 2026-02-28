@@ -15,7 +15,7 @@ export const Dashboard = () => {
         "flex-1 min-w-0 relative flex flex-col h-full overflow-hidden transition-colors duration-500",
         isDark ? "bg-[#050505]" : "bg-slate-100"
     )}>
-      {/* 1. 상단 시스템 정보 */}
+      {/* 상단 시스템 정보 */}
       <div className="absolute top-4 left-6 z-10 pointer-events-none select-none">
         <h1 className={clsx("text-4xl font-black tracking-tighter uppercase transition-colors duration-500", 
           isDark ? "text-white/30" : "text-slate-900/30"
@@ -32,28 +32,32 @@ export const Dashboard = () => {
         </div>
       </div>
 
-      {/* 2. 레이더 캔버스 영역: pointer-events-auto가 확실히 작동하게 설정 */}
+      {/* 레이더 캔버스 영역 */}
       <div className="flex-1 w-full h-full relative z-[1]">
-        <div className={clsx(
-          "absolute inset-0 transition-opacity duration-500 pointer-events-auto",
-          viewMode === 'detached' ? "opacity-100" : "opacity-0 pointer-events-none"
-        )}>
-          <Radar isMainView={true} key={isDark ? 'dark-radar' : 'light-radar'} /> 
-        </div>
-
-        {/* 대기 모드 오버레이 */}
-        <div className={clsx(
-          "absolute inset-0 flex flex-col items-center justify-center font-mono transition-all duration-500 bg-black/60 backdrop-blur-sm z-20",
-          viewMode === 'attached' ? "opacity-100" : "opacity-0 pointer-events-none"
-        )}>
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-12 h-12 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
-            <span className="text-blue-400 font-bold tracking-[0.2em] animate-pulse uppercase">Radar Data Externalized</span>
+        {viewMode === 'detached' && (
+          <div className={clsx(
+            "absolute inset-0 transition-opacity duration-500 pointer-events-auto",
+            "opacity-100"
+          )}>
+            <Radar isMainView={true} key={isDark ? 'dark-radar' : 'light-radar'} /> 
           </div>
-        </div>
+        )}
+
+        {/* 대기 모드 오버레이: attached 모드일 때만 활성화 */}
+        {viewMode === 'attached' && (
+          <div className={clsx(
+            "absolute inset-0 flex flex-col items-center justify-center font-mono transition-all duration-500 bg-black/60 backdrop-blur-sm z-20",
+            "opacity-100"
+          )}>
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-12 h-12 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+              <span className="text-blue-400 font-bold tracking-[0.2em] animate-pulse uppercase">Radar Data Externalized</span>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* 3. 전역 HUD */}
+      {/* 전역 HUD */}
       <ControlTower />
     </main>
   );

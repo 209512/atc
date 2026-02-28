@@ -37,13 +37,21 @@ export const AgentCard = ({
     const { playClick } = useATC();
     const { isLocked, isPaused, isForced, isPriority, isOverride } = useAgentLogic(agent, state);
 
+    // [최적화] 카드가 열려 있을 때만 로그 필터링 수행
     const filteredLogs = useMemo(() => {
+        if (!isSelected) return []; 
+        
         const allLogs = state?.logs || [];
         const myId = String(agent.id);
-        return allLogs.filter((log: LogEntry) => 
-            String(log.agentId) === myId || (String(log.agentId) === 'system' && isSelected)
-        );
-    }, [state?.logs, agent.id, isSelected]);
+        const myDisplayName = agent.displayId || myId;
+        
+        return allLogs.filter((log: LogEntry) => {
+            const logAgentId = String(log.agentId || '');
+            const msg = (log.message || '').toUpperCase();
+            const isMeMentioned = msg.includes(myId.toUpperCase()) || msg.includes(myDisplayName.toUpperCase());
+            return logAgentId === myId || (['system', 'policy'].includes(logAgentId.toLowerCase()) && isMeMentioned);
+        });
+    }, [state?.logs, agent.id, agent.displayId, isSelected]);
 
     return (
         <Reorder.Item 
@@ -69,7 +77,6 @@ export const AgentCard = ({
                 )}
                 onClick={() => renamingId !== agent.id && onSelect(isSelected ? null : agent.id)}
             >
-                {/* Header */}
                 <div className="flex justify-between items-center mb-2 h-7 relative">
                     <div className="flex items-center gap-2 min-w-0 flex-1 h-full">
                         {isPrioritySection && (
@@ -97,7 +104,6 @@ export const AgentCard = ({
                     </div>
                 </div>
 
-                {/* Status & Model */}
                 <div className="flex justify-between items-center text-[10px] gap-2 h-5">
                     <div className="flex items-center gap-2 overflow-hidden">
                         <AgentStatusBadge 

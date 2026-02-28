@@ -7,27 +7,26 @@ export const useCategorizedAgents = () => {
     const { agents = [], state } = useATC();
 
     return useMemo(() => {
-        const holderId = state.holder;
-        const priorityIds = state.priorityAgents || [];
-
-        const naturalSort = (a: Agent, b: Agent) => 
-            a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' });
-
-        const masterAgent = agents.find((a: Agent) => a.id === holderId) || null;
+        const priorityIds = state?.priorityAgents || [];
 
         const priorityAgents = priorityIds
             .map((id: string) => agents.find((a: Agent) => a.id === id))
-            .filter((a): a is Agent => !!a);
+            .filter((a): a is Agent => !!a) || [];
 
-        const normalAgents = agents
-            .filter((a: Agent) => !priorityIds.includes(a.id))
-            .sort(naturalSort);
+        const queueAgents = agents.filter((a: Agent) => !priorityIds.includes(a.id)) || [];
+
+        const sortedNormalAgents = [...queueAgents].sort((a: Agent, b: Agent) => 
+            (a.displayId || a.id).localeCompare((b.displayId || b.id), undefined, { 
+                numeric: true, 
+                sensitivity: 'base' 
+            })) || [];
 
         return {
             priorityAgents,
-            normalAgents,
-            masterAgent,
+            normalAgents: sortedNormalAgents,
+            queueAgents,
+            masterAgent: agents.find((a: Agent) => a.id === state?.holder) || null,
             priorityIds
         };
-    }, [agents, state.priorityAgents, state.holder]);
+    }, [agents, state?.priorityAgents, state?.holder]);
 };

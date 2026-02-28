@@ -13,7 +13,7 @@ import { Agent } from '@/contexts/atcTypes';
 export const QueueDisplay = () => {
     const { state } = useATC();
     const { isDark } = useUI();
-    const { priorityAgents, normalAgents, masterAgent } = useCategorizedAgents();
+    const { priorityAgents = [], queueAgents = [], masterAgent = null } = useCategorizedAgents();
     const [isOpen, setIsOpen] = useState(true);
     const nodeRef = useRef<HTMLDivElement>(null);
 
@@ -107,12 +107,12 @@ export const QueueDisplay = () => {
                     <section>
                         <Tooltip content="Standard Traffic Rotation" position="right">
                             <div className="text-[9px] uppercase opacity-50 mb-1.5 flex items-center gap-1 font-bold">
-                                <User size={10} /> Active_Traffic ({normalAgents.length})
+                                <User size={10} /> Active_Traffic ({queueAgents.length})
                             </div>
                         </Tooltip>
                         <div className="space-y-1">
-                            {normalAgents.length > 0 ? (
-                                normalAgents.map((agent: Agent, idx: number) => (
+                            {queueAgents.length > 0 ? (
+                                queueAgents.map((agent: Agent, idx: number) => (
                                     <div key={agent.id} className={clsx("flex items-center justify-between p-1.5 border rounded-sm", 
                                         getAgentCardStyle({
                                             isForced: agent.id === state.forcedCandidate, 

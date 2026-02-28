@@ -12,11 +12,12 @@ export const ControlTower = () => {
         <div 
             className="fixed top-0 left-0 pointer-events-none transition-all duration-300" 
             style={{ 
-                zIndex: 40, // 사이드바(50)보다 낮게 설정
+                zIndex: 45, 
                 width: `calc(100vw - ${sidebarWidth}px)`, 
                 height: '100vh' 
             }}
         >
+            {/* 하위 컴포넌트들은 pointer-events-auto 설정, 클릭 가능 */}
             <TerminalLog />
             <QueueDisplay />
             <TacticalPanel />

@@ -14,14 +14,22 @@ export const useAgentSettings = (onClose: () => void) => {
     const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI traffic controller.');
     const [isLoading, setIsLoading] = useState(false);
     
-    const API_URL = ((import.meta as any).env?.VITE_PUBLIC_API_URL || 'http://localhost:3000');
+    const API_URL = (import.meta as any).env?.VITE_PUBLIC_API_URL || 'http://localhost:3000';
 
     useEffect(() => {
-        if (!selectedAgent || selectedAgent.trim() === "") return;
+        if (!selectedAgent || selectedAgent === "Select") return;
         
         const loadConfig = async () => {
             try {
                 const response = await fetch(`${API_URL}/api/agents/${encodeURIComponent(selectedAgent)}/config`);
+                
+                if (response.status === 404) {
+                    setProvider('mock');
+                    setModel('');
+                    setSystemPrompt('You are a helpful AI traffic controller.');
+                    return; 
+                }
+
                 if (response.ok) {
                     const data = await response.json();
                     setProvider(data.provider || 'mock');
@@ -29,7 +37,7 @@ export const useAgentSettings = (onClose: () => void) => {
                     setSystemPrompt(data.systemPrompt || 'You are a helpful AI traffic controller.');
                 }
             } catch (err) {
-                console.warn("CONFIG_LOAD_FAILED");
+                console.error("[ATC_SYSTEM] Network connection failed.");
             }
         };
         loadConfig();
@@ -37,23 +45,19 @@ export const useAgentSettings = (onClose: () => void) => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
-        if (!selectedAgent) {
-            onClose();
-            return;
-        }
+        if (!selectedAgent || selectedAgent === "Select") { onClose(); return; }
 
-        const nextModelName = model.trim() || 'DEFAULT_MODEL';
         setIsLoading(true);
-        
         try {
-            await fetch(`${API_URL}/api/agents/${encodeURIComponent(selectedAgent)}/config`, {
+            const response = await fetch(`${API_URL}/api/agents/${encodeURIComponent(selectedAgent)}/config`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ config: { provider, apiKey, model: nextModelName, systemPrompt } }),
+                body: JSON.stringify({ config: { provider, apiKey, model: model.trim(), systemPrompt } }),
             });
 
-            updateAgentConfig(selectedAgent, { model: nextModelName });
+            if (response.ok) {
+                updateAgentConfig(selectedAgent, { model: model.trim() });
+            }
         } catch (err) {
             console.error("SYNC_ERROR:", err);
         } finally {
@@ -64,11 +68,8 @@ export const useAgentSettings = (onClose: () => void) => {
 
     return {
         agents, isDark, areTooltipsEnabled, setAreTooltipsEnabled,
-        selectedAgent, setSelectedAgent,
-        provider, setProvider,
-        apiKey, setApiKey,
-        model, setModel,
-        systemPrompt, setSystemPrompt,
+        selectedAgent, setSelectedAgent, provider, setProvider,
+        apiKey, setApiKey, model, setModel, systemPrompt, setSystemPrompt,
         isLoading, handleSubmit
     };
 };

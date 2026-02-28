@@ -8,6 +8,7 @@ import { useATC } from '@/hooks/system/useATC';
 import { useAgentLogic } from '@/hooks/agent/useAgentLogic';
 import { useTacticalActions } from '@/hooks/agent/useTacticalActions';
 import { AgentActionButtons } from '@/components/common/AgentActionButtons';
+import { LOG_LEVELS } from '@/utils/logStyles';
 
 interface AgentDetailPopupProps {
     agent: Agent | undefined;
@@ -35,28 +36,29 @@ export const AgentDetailPopup = ({
     const verticalOffset = -180; 
 
     return (
-        <Html position={position} center zIndexRange={[1000, 0]} pointerEvents="auto">
+        <Html position={position} center zIndexRange={[100, 0]} pointerEvents="auto" occlude={false}>
              <div 
                 className={clsx(
                     "p-4 rounded-lg border shadow-2xl backdrop-blur-xl transition-all duration-300 select-none",
+                    "pointer-events-auto",
                     isCompact ? "w-48 scale-90" : "w-64",
                     isForced ? "ring-2 ring-purple-500 bg-purple-900/20" : 
                     (isDark ? "bg-[#0d1117]/95 border-gray-700 text-gray-300" : "bg-white/95 border-slate-300 text-slate-700")
                 )}
                 style={{ transform: `translateY(${verticalOffset}px)`, cursor: 'default' }} 
-                onPointerDown={(e) => e.stopPropagation()}
+                onPointerDown={(e) => { e.stopPropagation(); }}
                 onPointerUp={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); }}
                 onWheel={(e) => e.stopPropagation()}
             >
                 <div className="flex justify-between items-start mb-3 border-b pb-2 border-gray-500/20">
                     <div className="flex items-center gap-2 overflow-hidden">
-                        <Activity size={14} className={clsx(isLocked ? "text-emerald-500" : "text-blue-500", "shrink-0")} />
+                        <Activity size={14} className="shrink-0" style={{ color: isLocked ? LOG_LEVELS.success.color : LOG_LEVELS.info.color }} />
                         <span className="font-black text-xs font-mono tracking-tighter truncate">
                             {/* displayId 적용 */}
                             {agent.displayId || agent.id}
                         </span>
-                        {isPaused && <Pause size={10} className="text-red-500 animate-pulse shrink-0" />}
+                        {isPaused && <Pause size={10} className="animate-pulse shrink-0" style={{ color: LOG_LEVELS.system.color }} />}
                     </div>
                     <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="hover:text-red-500 transition-colors ml-2 shrink-0 p-1 cursor-pointer">
                         <X size={16} />
@@ -66,7 +68,13 @@ export const AgentDetailPopup = ({
                 <div className="space-y-1.5 text-[10px] font-mono mb-4">
                     <div className="flex justify-between items-center">
                         <span className="opacity-50 flex items-center gap-1"><Cpu size={10}/> STATUS</span> 
-                        <span className={clsx("font-bold px-1 rounded", isPaused ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500')}>
+                        <span 
+                            className="font-bold px-1 rounded" 
+                            style={{ 
+                                color: isPaused ? LOG_LEVELS.system.color : LOG_LEVELS.success.color,
+                                backgroundColor: isPaused ? `${LOG_LEVELS.system.color}1A` : `${LOG_LEVELS.success.color}1A`
+                            }}
+                        >
                             {statusLabel}
                         </span>
                     </div>

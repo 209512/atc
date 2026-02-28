@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import clsx from 'clsx';
 import { Agent } from '@/contexts/atcTypes';
+import { LOG_LEVELS } from '@/utils/logStyles';
 
 interface CentralHubProps {
   isLocked: boolean;
@@ -36,9 +37,9 @@ export const CentralHub = ({ isLocked, isOverride, holder, isDark, agents }: Cen
             <mesh>
                 <sphereGeometry args={[1, 16, 16]} />
                 <meshStandardMaterial 
-                    color={isOverride ? "#ef4444" : (isLocked ? "#10b981" : "#3b82f6")}
+                    color={isOverride ? LOG_LEVELS.critical.color : (isLocked ? LOG_LEVELS.success.color : LOG_LEVELS.info.color)}
                     wireframe
-                    emissive={isOverride ? "#ef4444" : (isLocked ? "#10b981" : "#3b82f6")}
+                    emissive={isOverride ? LOG_LEVELS.critical.color : (isLocked ? LOG_LEVELS.success.color : LOG_LEVELS.info.color)}
                     emissiveIntensity={0.5}
                 />
             </mesh>
