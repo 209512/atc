@@ -1,3 +1,4 @@
+// src/core/providers/BaseProvider.js
 class BaseProvider {
   constructor(config) {
     this.config = config;

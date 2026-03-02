@@ -210,12 +210,38 @@ class Agent {
   }
 
   async executeTask(isTarget) {
-    await new Promise(r => setTimeout(r, 1000)); 
-    if (isTarget) {
-      this.eventBus.state.forcedCandidate = null;
-      this.eventBus.lockDirector.refreshResourceId();
-      this.eventBus.emitState();
-    }
+      const startTime = Date.now();
+        
+      this.state.activity = "AI_THINKING";
+      await this.updateStatus(CONSTANTS.STATUS_ACTIVE, this.eventBus.state.resourceId, "THINKING");
+
+      const systemInstruction = this.config.systemPrompt || 
+          `You are a tactical ATC Agent [${this.id}]. Tone: Professional, Robotic.`;
+        
+      const prompt = isTarget 
+          ? "EMERGENCY OVERRIDE: Resource seized. State your emergency plan in one sentence."
+          : `Resource [${this.eventBus.state.resourceId}] acquired. Describe your task in 15 words.`;
+
+      try {
+          this.log(`🧠 AI Processing (${this.config.provider || 'mock'})...`, 'info');
+          const aiResponse = await this.provider.generateResponse(prompt, systemInstruction);
+
+          this.log(`📝 [Task Result]: ${aiResponse}`, 'success');
+          this.state.activity = "TASK_COMPLETED";
+            
+          const elapsed = Date.now() - startTime;
+          if (elapsed < 1500) await new Promise(r => setTimeout(r, 1500 - elapsed));
+
+      } catch (err) {
+          this.log(`❌ AI Execution Error: ${err.message}`, 'critical');
+          this.state.activity = "ERROR_HALT";
+      }
+
+      if (isTarget) {
+          this.eventBus.state.forcedCandidate = null;
+          if (this.eventBus.lockDirector) this.eventBus.lockDirector.refreshResourceId();
+          this.eventBus.emitState();
+      }
   }
 
   async stop() {  

@@ -1,3 +1,4 @@
+// src/core/providers/AnthropicProvider.js
 const BaseProvider = require('./BaseProvider');
 const Anthropic = require('@anthropic-ai/sdk');
 

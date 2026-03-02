@@ -1,3 +1,4 @@
+// src/core/providers/OpenAIProvider.js
 const BaseProvider = require('./BaseProvider');
 const OpenAI = require('openai');
 

@@ -1,3 +1,4 @@
+// src/core/providers/GeminiProvider.js
 const BaseProvider = require('./BaseProvider');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
