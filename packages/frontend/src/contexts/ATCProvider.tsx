@@ -5,7 +5,6 @@ import { useATCStream } from '@/hooks/system/useATCStream';
 import { atcApi } from '@/contexts/atcApi';
 import { useAudio } from '@/hooks/system/useAudio';
 import { Agent, ATCState } from '@/contexts/atcTypes';
-import { LOG_LEVELS } from '@/utils/logStyles';
 
 export interface ATCContextType {
   state: ATCState;
@@ -17,8 +16,8 @@ export interface ATCContextType {
   setIsAdminMuted: React.Dispatch<React.SetStateAction<boolean>>;
   toggleAdminMute: () => void;
   toggleGlobalStop: () => void;
-  togglePause: (uuid: string, paused: boolean) => void;
-  togglePriority: (uuid: string, priority: boolean) => void;
+  togglePause: (uuid: string) => void;
+  togglePriority: (uuid: string) => void;
   transferLock: (uuid: string) => void;
   terminateAgent: (uuid: string) => void;
   markAction: (uuid: string, field: string, value: any, isDelete?: boolean) => void;
@@ -43,9 +42,9 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const { playAlert, playSuccess, playClick } = useAudio(isAdminMuted);
 
   useEffect(() => {
-    atcApi.scaleAgents(state.trafficIntensity).catch(err => {
-      addLog(`API_CONNECT_FAIL: ${err.message}`, 'critical');
-    });
+    if (state.activeAgentCount === 0 && state.trafficIntensity > 0) {
+      atcApi.scaleAgents(state.trafficIntensity).catch(() => {});
+    }
   }, []);
 
   const setTrafficIntensity = useCallback((val: number) => {
@@ -54,132 +53,126 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     if (finalValue !== state.trafficIntensity) {
         playClick();
-        const prevIntensity = state.trafficIntensity;
-        setState(prev => ({ ...prev, trafficIntensity: finalValue }));
-        
         atcApi.scaleAgents(finalValue)
-          .then(res => {
-              if (res.agents) {
-                  setAgents(res.agents);
-                  setState(prev => ({ ...prev, trafficIntensity: res.agents.length }));
-              }
+          .then(() => {
+              setState(prev => ({ ...prev, trafficIntensity: finalValue }));
           })
-          .catch(err => {
+          .catch(() => {
               playAlert();
-              addLog(`SCALE_FAILED: ${err.message}`, 'error');
-              setState(prev => ({ ...prev, trafficIntensity: prevIntensity }));
           });
     }
-  }, [state.trafficIntensity, state.priorityAgents, setState, setAgents, playClick, playAlert, addLog]);
+  }, [state.trafficIntensity, state.priorityAgents, setState, playClick, playAlert]);
 
-  const togglePause = useCallback((uuid: string, paused: boolean) => {
+  const togglePause = useCallback((uuid: string) => {
     playClick();
-    const nextStatus = paused ? 'paused' : 'active';
-    markAction(uuid, 'status', nextStatus);
-    setAgents(prev => prev.map(a => a.id === uuid ? { ...a, status: nextStatus as any, isPaused: paused } : a));
-    
-    atcApi.togglePause(uuid, paused).catch(err => {
-        playAlert();
-        addLog(`PAUSE_FAILED: ${err.message}`, 'error', uuid);
-        markAction(uuid, 'status', null);
-    });
-    addLog(paused ? 'SUSPENDED' : 'RESUMED', 'system', uuid);
-  }, [setAgents, addLog, markAction, playClick, playAlert]);
+    const target = agents.find(a => String(a.uuid || a.id) === String(uuid));
+    if (!target) return;
 
-  const togglePriority = useCallback((uuid: string, priority: boolean) => {
-    priority ? playSuccess() : playClick();
-    markAction(uuid, 'priority', priority);
-    setAgents(prev => prev.map(a => a.id === uuid ? { ...a, priority } : a));
+    const nextPaused = !target.isPaused;
+    markAction(uuid, 'isPaused', nextPaused);
     
-    addLog(priority ? 'PRIORITY_SET' : 'PRIORITY_REMOVED', priority ? 'warn' : 'info', uuid);
-    atcApi.togglePriority(uuid, priority).catch(err => {
-        playAlert();
-        addLog(`PRIORITY_FAILED: ${err.message}`, 'error', uuid);
-        markAction(uuid, 'priority', !priority);
-    });
-  }, [setAgents, markAction, addLog, playClick, playSuccess, playAlert]);
+    atcApi.togglePause(uuid, nextPaused)
+      .catch(err => {
+          playAlert();
+          markAction(uuid, 'isPaused', !nextPaused); 
+      });
+  }, [agents, markAction, playClick, playAlert]);
 
+  const togglePriority = useCallback((uuid: string) => {
+    const target = agents.find(a => String(a.uuid || a.id) === String(uuid));
+    if (!target) return;
+
+    const nextPriority = !target.priority;
+    nextPriority ? playSuccess() : playClick();
+    markAction(uuid, 'priority', nextPriority);
+    
+    atcApi.togglePriority(uuid, nextPriority)
+      .catch(err => {
+          playAlert();
+          markAction(uuid, 'priority', !nextPriority); 
+      });
+  }, [agents, markAction, playClick, playSuccess, playAlert]);
+  
   const terminateAgent = useCallback((uuid: string) => {
     if (agents.length <= 1) {
         playAlert();
-        addLog(`TERMINATION DENIED: MINIMUM 1 AGENT REQUIRED`, 'error');
         return;
     }
     playClick();
     markAction(uuid, '', null, true);
     
-    const prevAgents = [...agents];
-    setAgents(prev => prev.filter(a => a.id !== uuid));
-    addLog(`TERMINATING`, 'error', uuid);
-    
     atcApi.terminateAgent(uuid)
       .then(() => {
-          setState(prev => ({ ...prev, trafficIntensity: agents.length - 1 }));
+          setState(prev => ({ ...prev, trafficIntensity: Math.max(0, agents.length - 1) }));
       })
-      .catch(err => {
+      .catch(() => {
           playAlert();
-          addLog(`TERMINATE_FAILED: ${err.message}`, 'error', uuid);
-          setAgents(prevAgents);
+          markAction(uuid, '', null, false);
       });
-  }, [agents, setAgents, setState, addLog, markAction, playClick, playAlert]);
+  }, [agents.length, setState, markAction, playClick, playAlert]);
 
   const transferLock = useCallback((uuid: string) => {
     playAlert();
-    markAction(uuid, 'forcedCandidate', uuid);
-    setState(prev => ({ ...prev, forcedCandidate: uuid }));
-    addLog(`FORCE_TRANSFER_INITIATED`, 'system', uuid);
+    markAction('', 'forcedCandidate', uuid);
+    markAction('', 'holder', null); 
     
-    atcApi.transferLock(uuid).catch(err => {
-        addLog(`TRANSFER_FAILED: ${err.message}`, 'error', uuid);
-        setState(prev => ({ ...prev, forcedCandidate: null }));
-    });
-  }, [setState, addLog, markAction, playAlert]);
+    atcApi.transferLock(uuid)
+      .catch(() => {
+          markAction('', 'forcedCandidate', null);
+      });
+  }, [markAction, playAlert]);
   
   const toggleGlobalStop = useCallback(() => {
     playAlert();
     const nextStop = !state.globalStop;
     markAction('', 'globalStop', nextStop);
-    setState(prev => ({ ...prev, globalStop: nextStop }));
-    addLog(nextStop ? 'GLOBAL_STOP_ENGAGED' : 'SYSTEM_RELEASED', 'system');
     
-    atcApi.toggleGlobalStop(nextStop).catch(err => {
-        addLog(`GLOBAL_STOP_FAILED: ${err.message}`, 'error');
-        setState(prev => ({ ...prev, globalStop: !nextStop }));
-    });
-  }, [state.globalStop, setState, markAction, addLog, playAlert]);
+    atcApi.toggleGlobalStop(nextStop)
+      .catch(() => {
+          markAction('', 'globalStop', !nextStop);
+      });
+  }, [state.globalStop, markAction, playAlert]);
 
   const triggerOverride = useCallback(async () => {
     playAlert();
     markAction('', 'overrideSignal', true);
-    setState(prev => ({ ...prev, overrideSignal: true, holder: 'Human-Operator' }));
-    addLog("EMERGENCY OVERRIDE", 'critical');
+    markAction('', 'holder', 'Human-Operator');
     
-    return atcApi.triggerOverride().catch(err => {
-        addLog(`OVERRIDE_FAILED: ${err.message}`, 'error');
-        setState(prev => ({ ...prev, overrideSignal: false, holder: null }));
-    });
-  }, [playAlert, markAction, setState, addLog]);
+    return atcApi.triggerOverride()
+      .catch(() => {
+          markAction('', 'overrideSignal', false);
+          markAction('', 'holder', null);
+      });
+  }, [playAlert, markAction]);
 
   const releaseLock = useCallback(async () => {
     playSuccess();
     markAction('', 'overrideSignal', false);
-    setState(prev => ({ ...prev, overrideSignal: false, holder: null }));
-    addLog("OVERRIDE RELEASED", 'info');
+    markAction('', 'holder', null);
     
-    return atcApi.releaseLock().catch(err => {
-        addLog(`RELEASE_FAILED: ${err.message}`, 'error');
-        setState(prev => ({ ...prev, overrideSignal: true, holder: 'Human-Operator' }));
-    });
-  }, [playSuccess, markAction, setState, addLog]);
+    return atcApi.releaseLock()
+      .catch(() => {
+          markAction('', 'overrideSignal', true);
+          markAction('', 'holder', 'Human-Operator');
+      });
+  }, [playSuccess, markAction]);
 
   const updateAgentConfig = useCallback((uuid: string, config: any) => {
-      setAgents(prev => prev.map(a => a.id === uuid ? { ...a, ...config } : a));
-      addLog(`CONFIG_UPDATED`, 'success', uuid);
-      
-      atcApi.updateConfig(uuid, config).catch(err => 
-          addLog(`CONFIG_FAILED: ${err.message}`, 'error', uuid)
-      );
-  }, [setAgents, addLog]);
+      setAgents(prev => prev.map(a => String(a.uuid || a.id) === String(uuid) ? { ...a, ...config } : a));
+      atcApi.updateConfig(uuid, config).catch(() => {});
+  }, [setAgents]);
+
+  const handleRename = useCallback(async (uuid: string, newName: string) => {
+    if (!newName) return;
+    markAction(uuid, 'displayName', newName); 
+    try {
+        await atcApi.renameAgent(uuid, newName);
+        playSuccess();
+    } catch (err: any) {
+        playAlert();
+        markAction(uuid, 'displayName', null);
+    }
+  }, [markAction, playSuccess, playAlert]);
 
   const value = useMemo(() => ({
     state, agents, setState, setAgents, updateAgentConfig,
@@ -188,35 +181,11 @@ export const ATCProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTrafficIntensity, triggerOverride, releaseLock, playAlert, playClick, addLog,
     updatePriorityOrder: (newOrder: string[]) => {
         markAction('', 'priorityAgents', newOrder);
-        setState(prev => ({ ...prev, priorityAgents: newOrder }));
-        atcApi.updatePriorityOrder(newOrder).catch(err => addLog(`ORDER_FAILED: ${err.message}`, 'error'));
+        atcApi.updatePriorityOrder(newOrder).catch(() => {});
     },
-    renameAgent: async (uuid: string, newName: string) => {
-        if (!newName) return;
-        markAction(uuid, 'rename', newName);
-        addLog(`CALLSIGN_UPDATE: ${newName}`, 'system', uuid); 
-        try {
-            await atcApi.renameAgent(uuid, newName);
-            playSuccess(); 
-        } catch (err: any) {
-            playAlert();
-            addLog(`RENAME_FAILED: ${err.message}`, 'error', uuid);
-            markAction(uuid, 'rename', null);
-            throw err;
-        }
-    },
-    submitRename: async (uuid: string, newName: string) => {
-        if (!newName) return;
-        markAction(uuid, 'rename', newName);
-        try {
-            await atcApi.renameAgent(uuid, newName);
-            playSuccess();
-        } catch (err: any) {
-            playAlert();
-            markAction(uuid, 'rename', null);
-        }
-    }
-  }), [state, agents, isAdminMuted, toggleGlobalStop, togglePause, togglePriority, transferLock, terminateAgent, markAction, addLog, setTrafficIntensity, triggerOverride, releaseLock, playAlert, playClick, playSuccess]);
+    renameAgent: handleRename,
+    submitRename: handleRename
+  }), [state, agents, setState, setAgents, updateAgentConfig, isAdminMuted, toggleGlobalStop, togglePause, togglePriority, transferLock, terminateAgent, markAction, addLog, setTrafficIntensity, triggerOverride, releaseLock, playAlert, playClick, handleRename]);
 
   return (
     <ATCContext.Provider value={value}>

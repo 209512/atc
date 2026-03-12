@@ -1,5 +1,5 @@
 // src/contexts/atcApi.ts
-const BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000/api';
+const BASE_URL = '/api';
 
 interface RequestOptions extends RequestInit {
   timeout?: number;

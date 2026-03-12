@@ -33,11 +33,8 @@ export const Radar: React.FC<{ compact?: boolean; isMainView?: boolean }> = ({ c
 
     const targetPos = useMemo(() => {
         if (!selectedAgent) return null;
-        if (selectedAgent.status === 'paused' || selectedAgent.isPaused || isGloballyStopped) {
-            return null; 
-        }
         return selectedAgent.position as [number, number, number];
-    }, [selectedAgent, isGloballyStopped]);
+    }, [selectedAgent]);
 
     return (
         <div 

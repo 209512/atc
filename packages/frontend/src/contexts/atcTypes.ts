@@ -13,6 +13,7 @@ export interface LogEntry {
 
 export interface Agent {
   id: string;
+  uuid: string;
   displayId?: string;
   displayName?: string;
   name?: string;

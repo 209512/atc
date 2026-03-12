@@ -14,7 +14,7 @@ export const useAgentSettings = (onClose: () => void) => {
     const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI traffic controller.');
     const [isLoading, setIsLoading] = useState(false);
     
-    const API_URL = (import.meta as any).env?.VITE_PUBLIC_API_URL || 'http://localhost:3000';
+    const API_URL = '';
 
     useEffect(() => {
         if (!selectedAgent || selectedAgent === "Select") return;

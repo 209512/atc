@@ -3,7 +3,6 @@ import { useMemo } from 'react';
 import { Agent, ATCState } from '@/contexts/atcTypes';
 
 /**
- * 에이전트의 현재 상태를 계산하고 UI 스타일 결정에 필요한 메타데이터를 반환합니다.
  * @param agent 개별 에이전트 객체
  * @param state ATC 전역 상태
  */
@@ -12,27 +11,30 @@ export const useAgentLogic = (agent: Agent, state: ATCState) => {
     holder: null, 
     globalStop: false, 
     waitingAgents: [], 
+    priorityAgents: [],
     forcedCandidate: null, 
     logs: [],
     overrideSignal: false 
   }, [state]);
 
-  const isLocked = useMemo(() => s.holder === agent.id, [s.holder, agent.id]);
-
+  const agentId = useMemo(() => String(agent.uuid || agent.id), [agent.uuid, agent.id]);
+  const isLocked = useMemo(() => String(s.holder) === agentId, [s.holder, agentId]);
   const isPaused = useMemo(() => {
     const status = String(agent.status || '').toLowerCase();
     return status === 'paused' || agent.isPaused === true || s.globalStop === true;
   }, [agent.status, agent.isPaused, s.globalStop]);
 
-  const isForced = useMemo(() => s.forcedCandidate === agent.id, [s.forcedCandidate, agent.id]);
+  const isForced = useMemo(() => String(s.forcedCandidate) === agentId, [s.forcedCandidate, agentId]);
 
-  const isPriority = useMemo(() => !!agent.priority, [agent.priority]);
+  const isPriority = useMemo(() => {
+    return !!agent.priority || (s.priorityAgents || []).map(id => String(id)).includes(agentId);
+  }, [agent.priority, agentId, s.priorityAgents]);
 
   const isOverride = useMemo(() => !!s.overrideSignal, [s.overrideSignal]);
 
   const isWaiting = useMemo(() => 
-    s.waitingAgents?.includes(agent.id) || agent.status === 'waiting',
-    [s.waitingAgents, agent.id, agent.status]
+    (s.waitingAgents || []).map(id => String(id)).includes(agentId) || agent.status === 'waiting',
+    [s.waitingAgents, agentId, agent.status]
   );
 
   return {

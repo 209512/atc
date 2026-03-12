@@ -69,10 +69,11 @@ export const AgentDrone = ({
         const effectivelyPaused = isPaused || isGlobalStopped;
 
         if (effectivelyPaused) {
-            groupRef.current.position.copy(currentPos.current);
+            targetVec.current.set(position[0], position[1], position[2]);
+            groupRef.current.position.lerp(targetVec.current, 0.1);
+            currentPos.current.copy(groupRef.current.position);
         } else {
             targetVec.current.set(position[0], position[1], position[2]);
-
             const lerpFactor = isResuming.current ? 0.02 : 0.06;
 
             groupRef.current.position.lerp(targetVec.current, lerpFactor);

@@ -23,7 +23,7 @@ export const useTacticalActions = () => {
     const handleStartRename = useCallback((agentId: string) => {
         if (playClick) playClick();
         setRenamingId(agentId);
-        const target = agents.find((a: Agent) => a.id === agentId);
+        const target = agents.find((a: Agent) => String(a.uuid || a.id) === String(agentId));
         setNewName(target?.displayId || agentId);
     }, [agents, playClick]);
 
@@ -42,7 +42,7 @@ export const useTacticalActions = () => {
             return;
         }
 
-        const targetAgent = agents.find((a: Agent) => String(a.id) === String(id));
+        const targetAgent = agents.find((a: Agent) => String(a.uuid || a.id) === String(id));
         if (!trimmedName || trimmedName === (targetAgent?.displayId || id)) {
             return handleCancelRename();
         }
@@ -56,12 +56,12 @@ export const useTacticalActions = () => {
         }
     }, [newName, agents, submitRename, playAlert, handleCancelRename]);
         
-    const togglePriority = useCallback((id: string, enable: boolean) => {
-        apiTogglePriority(id, enable);
+    const togglePriority = useCallback((id: string) => {
+        apiTogglePriority(id);
     }, [apiTogglePriority]);
 
-    const onTogglePause = useCallback((agentId: string, currentPaused: boolean) => {
-        togglePause(agentId, !currentPaused);
+    const onTogglePause = useCallback((agentId: string) => {
+        togglePause(agentId);
     }, [togglePause]);
 
     const handleTerminate = useCallback((id: string) => {
